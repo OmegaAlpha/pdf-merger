@@ -1,0 +1,5 @@
+pdf_merger_env/
+__pycache__/
+*.pyc
+*.pdf
+*.exe
