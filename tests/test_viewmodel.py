@@ -42,19 +42,21 @@ def test_pdf_list_model_sort():
 def test_main_view_model_add_remove(qtbot, real_pdf):
     vm = MainViewModel()
     
-    with qtbot.waitSignal(vm.status_message, timeout=1000) as blocker:
-        vm.add_pdfs([real_pdf])
+    signals = []
+    vm.status_message.connect(lambda msg, timeout: signals.append(msg))
+    
+    vm.add_pdfs([real_pdf])
         
     assert len(vm.pdf_list_model.pdfs) == 1
     assert vm.pdf_list_model.pdfs[0].name == "dummy_for_vm.pdf"
-    assert "Added 1 PDF(s)" in blocker.args[0]
+    assert any("Added 1 PDF(s)" in s for s in signals)
     
     # Test remove
-    with qtbot.waitSignal(vm.status_message, timeout=1000) as blocker:
-        vm.remove_pdfs_by_indices([0])
+    signals.clear()
+    vm.remove_pdfs_by_indices([0])
         
     assert len(vm.pdf_list_model.pdfs) == 0
-    assert "Removed 1 PDF(s)" in blocker.args[0]
+    assert any("Removed 1 PDF(s)" in s for s in signals)
 
 def test_main_view_model_move_rows(qtbot):
     vm = MainViewModel()

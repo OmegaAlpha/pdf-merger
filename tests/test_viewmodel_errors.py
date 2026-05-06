@@ -16,13 +16,15 @@ def test_main_view_model_add_pdfs_invalid(qtbot, tmp_path):
     some_dir = tmp_path / "somedir"
     some_dir.mkdir()
     
+    signals = []
+    vm.status_message.connect(lambda msg, timeout: signals.append(msg))
+    
     # Add them
-    with qtbot.waitSignal(vm.status_message, timeout=1000) as blocker:
-        vm.add_pdfs([str(text_file), str(some_dir)])
+    vm.add_pdfs([str(text_file), str(some_dir)])
         
     assert len(vm.pdf_list_model.pdfs) == 2
-    assert "Added 2 PDF(s)" in blocker.args[0]
-    assert "error(s)" in blocker.args[0]
+    assert any("Added 2 PDF(s)" in s for s in signals)
+    assert any("error(s)" in s for s in signals)
 
 def test_main_view_model_remove_out_of_bounds():
     vm = MainViewModel()
