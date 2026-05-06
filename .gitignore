@@ -1,5 +1,16 @@
 pdf_merger_env/
+.venv/
 __pycache__/
 *.pyc
 *.pdf
 *.exe
+
+# PyInstaller folders and files
+build/
+dist/
+*.spec
+main.build/
+main.dist/
+
+# Testing and coverage
+.coverage

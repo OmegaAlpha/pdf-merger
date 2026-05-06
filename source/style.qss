@@ -1,0 +1,125 @@
+/* Global Typography and Background */
+* {
+    font-family: "Segoe UI Variable", "Segoe UI", "-apple-system", "BlinkMacSystemFont", "Roboto", "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    color: #E0E0E0;
+}
+
+QMainWindow, QWidget#central_widget {
+    background-color: #1E1E1E;
+}
+
+/* Table View styling */
+QTableView {
+    background-color: #252526;
+    alternate-background-color: #2D2D30;
+    border: 1px solid #3E3E42;
+    border-radius: 6px;
+    gridline-color: #3E3E42;
+    selection-background-color: #004B8B;
+    selection-color: white;
+}
+
+QTableView::item {
+    padding: 4px;
+}
+
+QHeaderView::section {
+    background-color: #333337;
+    color: #FFFFFF;
+    padding: 6px;
+    border: none;
+    border-right: 1px solid #3E3E42;
+    border-bottom: 1px solid #3E3E42;
+    font-weight: bold;
+}
+
+/* Button styling */
+QPushButton {
+    background-color: #333337;
+    border: 1px solid #3E3E42;
+    border-radius: 6px;
+    padding: 8px 16px;
+    color: #FFFFFF;
+}
+
+QPushButton:hover {
+    background-color: #3E3E42;
+    border-color: #4A4A4F;
+}
+
+QPushButton:pressed {
+    background-color: #2D2D30;
+}
+
+QPushButton:disabled {
+    background-color: #252526;
+    color: #6D6D70;
+    border-color: #2D2D30;
+}
+
+/* Primary Action Button (Accent Color) */
+QPushButton#mergeButton {
+    background-color: #0078D4;
+    border: 1px solid #0078D4;
+    font-weight: bold;
+}
+
+QPushButton#mergeButton:hover {
+    background-color: #1084D8;
+    border-color: #1084D8;
+}
+
+QPushButton#mergeButton:pressed {
+    background-color: #005A9E;
+}
+
+QPushButton#mergeButton:disabled {
+    background-color: #252526;
+    color: #6D6D70;
+    border-color: #2D2D30;
+}
+
+/* Text Input styling */
+QLineEdit {
+    background-color: #2D2D30;
+    border: 1px solid #3E3E42;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #FFFFFF;
+}
+
+QLineEdit:focus {
+    border: 1px solid #0078D4;
+    background-color: #1E1E1E;
+}
+
+/* Status Bar */
+QStatusBar {
+    background-color: #0078D4;
+    color: white;
+}
+
+/* Progress Bar */
+QProgressBar {
+    border: 1px solid #3E3E42;
+    border-radius: 6px;
+    text-align: center;
+    background-color: #2D2D30;
+}
+
+QProgressBar::chunk {
+    background-color: #0078D4;
+    border-radius: 4px;
+}
+
+/* Labels */
+QLabel {
+    color: #CCCCCC;
+}
+
+/* Specific styling for the empty state label */
+QLabel#emptyStateLabel {
+    color: #6D6D70;
+    font-size: 18px;
+}

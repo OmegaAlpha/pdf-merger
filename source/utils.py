@@ -94,7 +94,7 @@ def adjust_toc_pages_and_levels(toc, page_offset_0based, source_doc, level_incre
                 valid_entry = False
 
         elif dest_dict.get("kind") == fitz.LINK_GOTO:
-            original_page_0based = dest_dict.get("page", new_item[2] - 1)
+            original_page_0based = dest_dict.get("page", item[2] - 1)
             if isinstance(original_page_0based, int):
                 new_dest_page_0based = original_page_0based + page_offset_0based
                 if new_dest_page_0based < 0:
@@ -115,7 +115,7 @@ def adjust_toc_pages_and_levels(toc, page_offset_0based, source_doc, level_incre
 
         else:
             # Default
-            original_page_0based = new_item[2] - 1
+            original_page_0based = item[2] - 1
             new_dest_page_0based = original_page_0based + page_offset_0based
             if new_dest_page_0based < 0:
                 valid_entry = False
@@ -126,7 +126,10 @@ def adjust_toc_pages_and_levels(toc, page_offset_0based, source_doc, level_incre
                     "to": fitz.Point(0, 0),
                     "zoom": 0.0,
                 }
-                new_item[3] = new_dest_dict
+                if len(new_item) > 3:
+                    new_item[3] = new_dest_dict
+                else:
+                    new_item.append(new_dest_dict)
 
         if valid_entry:
             new_toc.append(new_item)
