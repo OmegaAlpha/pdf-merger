@@ -266,6 +266,31 @@ class MainViewModel(QObject):
             self.last_open_dir = directory
             self.settings.setValue("last_open_dir", self.last_open_dir)
 
+    def get_toc_for_pdf(self, row: int) -> tuple:
+        if not (0 <= row < len(self.pdf_list_model.pdfs)):
+            return None, 0, ""
+            
+        pdf = self.pdf_list_model.pdfs[row]
+        if pdf.custom_toc is not None:
+            return pdf.custom_toc, pdf.pages, pdf.name
+            
+        toc = []
+        try:
+            doc = fitz.open(pdf.file_path)
+            toc = doc.get_toc(simple=False)
+            doc.close()
+        except Exception as e:
+            print(f"Error reading TOC for {pdf.name}: {e}")
+            
+        if not toc:
+            toc = [[1, os.path.splitext(pdf.name)[0], 1]]
+            
+        return toc, pdf.pages, pdf.name
+
+    def set_custom_toc_for_pdf(self, row: int, toc: list):
+        if 0 <= row < len(self.pdf_list_model.pdfs):
+            self.pdf_list_model.pdfs[row].custom_toc = toc
+
     def add_pdfs(self, file_paths: List[str]):
         if not file_paths:
             return

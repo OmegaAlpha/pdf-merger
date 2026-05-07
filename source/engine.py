@@ -37,42 +37,55 @@ def merge_pdfs_engine(pdf_list: List[PDFDocument], output_path: str) -> Tuple[bo
                 source_toc = None
                 has_first_page_bookmark = False
                 try:
-                    source_toc = doc_to_add.get_toc(simple=False)
-                    if source_toc:
-                        has_first_page_bookmark = check_fitz_toc_for_first_page(source_toc)
+                    if pdf_item.custom_toc is not None:
+                        source_toc = pdf_item.custom_toc
+                    else:
+                        source_toc = doc_to_add.get_toc(simple=False)
+                        if source_toc:
+                            has_first_page_bookmark = check_fitz_toc_for_first_page(source_toc)
                 except Exception:
                     source_toc = None
 
                 # Build TOC
                 try:
-                    if has_first_page_bookmark and source_toc:
-                        adjusted_toc = adjust_toc_pages_and_levels(
-                            source_toc, current_page_offset, doc_to_add, level_increase=0
-                        )
-                        if adjusted_toc:
-                            final_toc.extend(adjusted_toc)
-                        else:
-                            toc_error_files.append(name)
-                    else:
-                        bookmark_title = os.path.splitext(name)[0]
-                        file_page_1based = current_page_offset + 1
-                        file_dest = {
-                            "kind": 1,
-                            "to": fitz.Point(0, 0),
-                            "page": current_page_offset,
-                            "zoom": 0.0,
-                        }
-                        file_entry = [1, bookmark_title, file_page_1based, file_dest]
-                        final_toc.append(file_entry)
-
+                    if pdf_item.custom_toc is not None:
+                        # User provided custom TOC, use it directly (just adjust page numbers)
                         if source_toc:
-                            adjusted_nested_toc = adjust_toc_pages_and_levels(
-                                source_toc, current_page_offset, doc_to_add, level_increase=1
+                            adjusted_toc = adjust_toc_pages_and_levels(
+                                source_toc, current_page_offset, doc_to_add, level_increase=0
                             )
-                            if adjusted_nested_toc:
-                                final_toc.extend(adjusted_nested_toc)
+                            if adjusted_toc:
+                                final_toc.extend(adjusted_toc)
+                    else:
+                        # Auto-generate TOC logic
+                        if has_first_page_bookmark and source_toc:
+                            adjusted_toc = adjust_toc_pages_and_levels(
+                                source_toc, current_page_offset, doc_to_add, level_increase=0
+                            )
+                            if adjusted_toc:
+                                final_toc.extend(adjusted_toc)
                             else:
                                 toc_error_files.append(name)
+                        else:
+                            bookmark_title = os.path.splitext(name)[0]
+                            file_page_1based = current_page_offset + 1
+                            file_dest = {
+                                "kind": 1,
+                                "to": fitz.Point(0, 0),
+                                "page": current_page_offset,
+                                "zoom": 0.0,
+                            }
+                            file_entry = [1, bookmark_title, file_page_1based, file_dest]
+                            final_toc.append(file_entry)
+
+                            if source_toc:
+                                adjusted_nested_toc = adjust_toc_pages_and_levels(
+                                    source_toc, current_page_offset, doc_to_add, level_increase=1
+                                )
+                                if adjusted_nested_toc:
+                                    final_toc.extend(adjusted_nested_toc)
+                                else:
+                                    toc_error_files.append(name)
                 except Exception as e:
                     traceback.print_exc()
                     toc_error_files.append(name)

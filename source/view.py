@@ -25,6 +25,7 @@ from PyQt6.QtCore import Qt, QSize, QSettings
 from PyQt6.QtGui import QIcon, QPixmap, QImage
 
 from viewmodel import MainViewModel
+from bookmark_editor import BookmarkEditorDialog
 
 class MainWindow(QMainWindow):
     def __init__(self, viewmodel: MainViewModel):
@@ -157,12 +158,17 @@ class MainWindow(QMainWindow):
         self.toggle_preview_btn.setCheckable(True)
         self.toggle_preview_btn.setChecked(preview_visible)
         
+        self.edit_bookmarks_btn = QPushButton(" Edit Bookmarks")
+        self.edit_bookmarks_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
+        self.edit_bookmarks_btn.setEnabled(False)
+        
         self.merge_btn = QPushButton(" Merge PDFs")
         self.merge_btn.setObjectName("mergeButton")
         self.merge_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
         
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.remove_btn)
+        btn_layout.addWidget(self.edit_bookmarks_btn)
         btn_layout.addWidget(self.toggle_preview_btn)
         btn_layout.addWidget(self.merge_btn)
         self.layout.addLayout(btn_layout)
@@ -247,6 +253,7 @@ class MainWindow(QMainWindow):
         # View bindings (UI events to ViewModel methods)
         self.add_btn.clicked.connect(self.on_add_pdfs)
         self.remove_btn.clicked.connect(self.on_remove_pdfs)
+        self.edit_bookmarks_btn.clicked.connect(self.on_edit_bookmarks)
         self.merge_btn.clicked.connect(self.on_merge)
         self.output_dir_btn.clicked.connect(self.on_set_output_dir)
         self.toggle_preview_btn.toggled.connect(self.on_toggle_preview)
@@ -323,6 +330,9 @@ class MainWindow(QMainWindow):
 
     def on_table_selection_changed(self, selected, deselected):
         indexes = self.pdf_table.selectionModel().selectedRows()
+        
+        self.edit_bookmarks_btn.setEnabled(len(indexes) == 1)
+        
         if not indexes:
             self.preview_list.clear()
             return
@@ -358,6 +368,18 @@ class MainWindow(QMainWindow):
         )
         if directory:
             self.vm.set_output_dir(directory)
+
+    def on_edit_bookmarks(self):
+        indexes = self.pdf_table.selectionModel().selectedRows()
+        if not indexes: return
+        row = indexes[0].row()
+        toc, max_pages, name = self.vm.get_toc_for_pdf(row)
+        
+        from PyQt6.QtWidgets import QDialog
+        dialog = BookmarkEditorDialog(toc, max_pages, name, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_toc = dialog.get_updated_toc()
+            self.vm.set_custom_toc_for_pdf(row, new_toc)
 
     # Signal handlers
     def on_output_dir_changed(self, directory: str):

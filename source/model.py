@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import List
 
 @dataclass
 class PDFDocument:
@@ -8,3 +9,4 @@ class PDFDocument:
     size_kb: float
     modified_dt: datetime
     pages: int
+    custom_toc: List = field(default=None)
