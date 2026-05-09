@@ -6,6 +6,7 @@ import fitz # Used to preload shared libraries early if needed
 
 from viewmodel import MainViewModel
 from view import MainWindow
+from theme_manager import ThemeManager
 
 def main():
     try:
@@ -13,21 +14,14 @@ def main():
             QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         app = QApplication(sys.argv)
         
-        import os
-        if getattr(sys, 'frozen', False):
-            base_dir = sys._MEIPASS
-        else:
-            base_dir = os.path.dirname(__file__)
-        qss_path = os.path.join(base_dir, "style.qss")
-        if os.path.exists(qss_path):
-            with open(qss_path, "r", encoding="utf-8") as f:
-                app.setStyleSheet(f.read())
+        tm = ThemeManager(app)
+        tm.apply_theme()
         
         # Initialize ViewModel
         vm = MainViewModel()
         
         # Initialize View
-        window = MainWindow(vm)
+        window = MainWindow(vm, tm)
         window.show()
         
         sys.exit(app.exec())

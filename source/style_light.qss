@@ -1,0 +1,196 @@
+/* Global Typography and Background */
+* {
+    font-family: "Segoe UI Variable", "Segoe UI", "-apple-system", "BlinkMacSystemFont", "Roboto", "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    color: #202020;
+}
+
+QMainWindow, QWidget#central_widget, QDialog {
+    background-color: #F3F3F3;
+}
+
+/* Table View styling */
+QTableView, QTreeView, QListView, QListWidget {
+    background-color: #FFFFFF;
+    alternate-background-color: #F9F9F9;
+    border: 1px solid #D1D1D1;
+    border-radius: 6px;
+    gridline-color: #E1E1E1;
+    selection-background-color: #0078D4;
+    selection-color: white;
+}
+
+QTableView::item, QTreeView::item, QListView::item, QListWidget::item {
+    padding: 4px;
+    min-height: 28px;
+}
+
+QHeaderView {
+    background-color: #F0F0F0;
+    border: none;
+}
+
+QHeaderView::section {
+    background-color: #F0F0F0;
+    color: #202020;
+    padding: 6px;
+    border: none;
+    border-right: 1px solid #D1D1D1;
+    border-bottom: 1px solid #D1D1D1;
+    font-weight: bold;
+}
+
+QTableCornerButton::section {
+    background-color: #F0F0F0;
+    border: none;
+    border-right: 1px solid #D1D1D1;
+    border-bottom: 1px solid #D1D1D1;
+}
+
+/* Button styling */
+QPushButton {
+    background-color: #FAFAFA;
+    border: 1px solid #D1D1D1;
+    border-radius: 6px;
+    padding: 8px 16px;
+    color: #202020;
+}
+
+QPushButton:hover {
+    background-color: #F0F0F0;
+    border-color: #C1C1C1;
+}
+
+QPushButton:pressed {
+    background-color: #E5E5E5;
+}
+
+QPushButton:disabled {
+    background-color: #F9F9F9;
+    color: #A0A0A0;
+    border-color: #E1E1E1;
+}
+
+/* Primary Action Button (Accent Color) */
+QPushButton#mergeButton {
+    background-color: #0078D4;
+    border: 1px solid #0078D4;
+    color: #FFFFFF;
+    font-weight: bold;
+}
+
+QPushButton#mergeButton:hover {
+    background-color: #1084D8;
+    border-color: #1084D8;
+}
+
+QPushButton#mergeButton:pressed {
+    background-color: #005A9E;
+}
+
+QPushButton#mergeButton:disabled {
+    background-color: #F9F9F9;
+    color: #A0A0A0;
+    border-color: #E1E1E1;
+}
+
+/* Text Input styling */
+QLineEdit, QComboBox {
+    background-color: #FFFFFF;
+    border: 1px solid #D1D1D1;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #202020;
+}
+
+QLineEdit:focus, QComboBox:focus {
+    border: 1px solid #0078D4;
+    background-color: #FFFFFF;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #FFFFFF;
+    color: #202020;
+    selection-background-color: #0078D4;
+    selection-color: white;
+    border: 1px solid #D1D1D1;
+    outline: 0px;
+}
+
+/* Status Bar */
+QStatusBar {
+    background-color: #0078D4;
+    color: white;
+}
+
+/* Progress Bar */
+QProgressBar {
+    border: 1px solid #D1D1D1;
+    border-radius: 6px;
+    text-align: center;
+    background-color: #FFFFFF;
+    color: #202020;
+}
+
+QProgressBar::chunk {
+    background-color: #0078D4;
+    border-radius: 4px;
+}
+
+/* Labels */
+QLabel {
+    color: #202020;
+}
+
+/* Specific styling for the empty state label */
+QLabel#emptyStateLabel {
+    color: #6D6D70;
+    font-size: 18px;
+}
+
+/* Splitter */
+QSplitter::handle {
+    background-color: transparent;
+    width: 4px;
+}
+QSplitter::handle:hover {
+    background-color: #D1D1D1;
+}
+QSplitter::handle:pressed {
+    background-color: #0078D4;
+}
+
+/* Menubar */
+QMenuBar {
+    background-color: #F3F3F3;
+    color: #202020;
+}
+QMenuBar::item {
+    background-color: transparent;
+    padding: 4px 8px;
+}
+QMenuBar::item:selected {
+    background-color: #E1E1E1;
+}
+QMenu {
+    background-color: #FFFFFF;
+    color: #202020;
+    border: 1px solid #D1D1D1;
+}
+QMenu::item {
+    padding: 6px 24px 6px 24px;
+}
+QMenu::item:selected {
+    background-color: #0078D4;
+    color: white;
+}
+
+QAbstractScrollArea::corner {
+    background-color: #FFFFFF;
+    border: none;
+}

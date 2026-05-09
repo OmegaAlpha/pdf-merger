@@ -5,12 +5,12 @@
     color: #E0E0E0;
 }
 
-QMainWindow, QWidget#central_widget {
+QMainWindow, QWidget#central_widget, QDialog {
     background-color: #1E1E1E;
 }
 
 /* Table View styling */
-QTableView, QTreeView {
+QTableView, QTreeView, QListView, QListWidget {
     background-color: #252526;
     alternate-background-color: #2D2D30;
     border: 1px solid #3E3E42;
@@ -20,9 +20,14 @@ QTableView, QTreeView {
     selection-color: white;
 }
 
-QTableView::item, QTreeView::item {
+QTableView::item, QTreeView::item, QListView::item, QListWidget::item {
     padding: 4px;
     min-height: 28px;
+}
+
+QHeaderView {
+    background-color: #333337;
+    border: none;
 }
 
 QHeaderView::section {
@@ -33,6 +38,13 @@ QHeaderView::section {
     border-right: 1px solid #3E3E42;
     border-bottom: 1px solid #3E3E42;
     font-weight: bold;
+}
+
+QTableCornerButton::section {
+    background-color: #333337;
+    border: none;
+    border-right: 1px solid #3E3E42;
+    border-bottom: 1px solid #3E3E42;
 }
 
 /* Button styling */
@@ -82,7 +94,7 @@ QPushButton#mergeButton:disabled {
 }
 
 /* Text Input styling */
-QLineEdit {
+QLineEdit, QComboBox {
     background-color: #2D2D30;
     border: 1px solid #3E3E42;
     border-radius: 6px;
@@ -90,9 +102,23 @@ QLineEdit {
     color: #FFFFFF;
 }
 
-QLineEdit:focus {
+QLineEdit:focus, QComboBox:focus {
     border: 1px solid #0078D4;
     background-color: #1E1E1E;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #2D2D30;
+    color: #FFFFFF;
+    selection-background-color: #0078D4;
+    selection-color: white;
+    border: 1px solid #3E3E42;
+    outline: 0px;
 }
 
 /* Status Bar */
@@ -123,4 +149,46 @@ QLabel {
 QLabel#emptyStateLabel {
     color: #6D6D70;
     font-size: 18px;
+}
+
+/* Splitter */
+QSplitter::handle {
+    background-color: transparent;
+    width: 4px;
+}
+QSplitter::handle:hover {
+    background-color: #3E3E42;
+}
+QSplitter::handle:pressed {
+    background-color: #0078D4;
+}
+
+/* Menubar */
+QMenuBar {
+    background-color: #1E1E1E;
+    color: #E0E0E0;
+}
+QMenuBar::item {
+    background-color: transparent;
+    padding: 4px 8px;
+}
+QMenuBar::item:selected {
+    background-color: #3E3E42;
+}
+QMenu {
+    background-color: #252526;
+    color: #E0E0E0;
+    border: 1px solid #3E3E42;
+}
+QMenu::item {
+    padding: 6px 24px 6px 24px;
+}
+QMenu::item:selected {
+    background-color: #0078D4;
+    color: white;
+}
+
+QAbstractScrollArea::corner {
+    background-color: #252526;
+    border: none;
 }

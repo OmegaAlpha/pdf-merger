@@ -22,15 +22,17 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
 )
 from PyQt6.QtCore import Qt, QSize, QSettings
-from PyQt6.QtGui import QIcon, QPixmap, QImage
+from PyQt6.QtGui import QIcon, QPixmap, QImage, QAction
 
 from viewmodel import MainViewModel
 from bookmark_editor import BookmarkEditorDialog
+from settings_dialog import SettingsDialog
 
 class MainWindow(QMainWindow):
-    def __init__(self, viewmodel: MainViewModel):
+    def __init__(self, viewmodel: MainViewModel, theme_manager=None):
         super().__init__()
         self.vm = viewmodel
+        self.theme_manager = theme_manager
         self.setWindowTitle("PDF Merger (MVVM)")
         self.setMinimumSize(QSize(900, 500))
         self.resize(1000, 600)
@@ -40,8 +42,12 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
 
+        self._setup_menubar()
         self._setup_ui()
         self._bind_viewmodel()
+        
+        if self.theme_manager:
+            self.theme_manager.apply_window_theme(self)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -59,6 +65,14 @@ class MainWindow(QMainWindow):
             event.acceptProposedAction()
         else:
             super().dropEvent(event)
+
+    def _setup_menubar(self):
+        menubar = self.menuBar()
+        file_menu = menubar.addMenu("&File")
+        
+        settings_action = QAction("Settings...", self)
+        settings_action.triggered.connect(self.on_settings_open)
+        file_menu.addAction(settings_action)
 
     def _setup_ui(self):
         # Table view setup
@@ -377,9 +391,18 @@ class MainWindow(QMainWindow):
         
         from PyQt6.QtWidgets import QDialog
         dialog = BookmarkEditorDialog(toc, max_pages, name, self)
+        if self.theme_manager:
+            self.theme_manager.apply_window_theme(dialog)
+        
         if dialog.exec() == QDialog.DialogCode.Accepted:
             new_toc = dialog.get_updated_toc()
             self.vm.set_custom_toc_for_pdf(row, new_toc)
+
+    def on_settings_open(self):
+        if self.theme_manager:
+            dialog = SettingsDialog(self.theme_manager, self)
+            self.theme_manager.apply_window_theme(dialog)
+            dialog.exec()
 
     # Signal handlers
     def on_output_dir_changed(self, directory: str):
