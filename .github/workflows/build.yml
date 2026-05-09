@@ -37,7 +37,7 @@ jobs:
 
       - name: Build Executable with PyInstaller
         run: |
-          pyinstaller --onedir --windowed --clean --name "PDFMerger" --add-data "source/style.qss;." "source/main.py"
+          pyinstaller --onedir --windowed --clean --name "PDFMerger" --add-data "source/style_dark.qss;." --add-data "source/style_light.qss;." "source/main.py"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
