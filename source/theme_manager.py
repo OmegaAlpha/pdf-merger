@@ -1,8 +1,8 @@
 import os
 import sys
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QSettings, Qt, QObject
-from PyQt6.QtGui import QPalette, QColor
+from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QSettings, Qt, QObject
+from PySide6.QtGui import QPalette, QColor
 
 class ThemeManager(QObject):
     def __init__(self, app: QApplication):
@@ -78,16 +78,31 @@ class ThemeManager(QObject):
         self.app.setPalette(palette)
         
         if getattr(sys, 'frozen', False):
-            base_dir = sys._MEIPASS
+            if hasattr(sys, '_MEIPASS'):
+                base_dir = sys._MEIPASS
+            else:
+                base_dir = os.path.dirname(sys.executable)
         else:
-            base_dir = os.path.dirname(__file__)
+            base_dir = os.path.dirname(os.path.abspath(__file__))
             
         qss_filename = "style_dark.qss" if is_dark else "style_light.qss"
-        qss_path = os.path.join(base_dir, qss_filename)
         
-        if os.path.exists(qss_path):
-            with open(qss_path, "r", encoding="utf-8") as f:
-                self.app.setStyleSheet(f.read())
+        # Try multiple potential locations for the QSS files
+        search_paths = [
+            os.path.join(base_dir, qss_filename),
+            os.path.join(base_dir, "source", qss_filename),
+            # Fallback for script mode if run from root
+            os.path.join(os.path.dirname(base_dir), "source", qss_filename) if not getattr(sys, 'frozen', False) else None
+        ]
+        
+        for qss_path in search_paths:
+            if qss_path and os.path.exists(qss_path):
+                try:
+                    with open(qss_path, "r", encoding="utf-8") as f:
+                        self.app.setStyleSheet(f.read())
+                    break
+                except Exception as e:
+                    print(f"Error loading stylesheet from {qss_path}: {e}")
                 
         for window in self.app.topLevelWidgets():
             self.apply_window_theme(window)

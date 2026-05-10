@@ -18,6 +18,18 @@ QTableView, QTreeView, QListView, QListWidget {
     gridline-color: #E1E1E1;
     selection-background-color: #0078D4;
     selection-color: white;
+    show-decoration-selected: 1;
+    outline: none;
+}
+
+QListWidget::item:selected {
+    background-color: #0078D4;
+    border-radius: 4px;
+}
+
+QListWidget::item:hover:!selected {
+    background-color: #E1E1E1;
+    border-radius: 4px;
 }
 
 QTableView::item, QTreeView::item, QListView::item, QListWidget::item {
@@ -194,3 +206,57 @@ QAbstractScrollArea::corner {
     background-color: #FFFFFF;
     border: none;
 }
+
+/* ScrollBar styling (Modern Stripe/Overlay) */
+QScrollBar:vertical {
+    background: transparent;
+    width: 14px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #C1C1C1;
+    min-height: 30px;
+    border-radius: 3px;
+    margin: 4px 4px 4px 4px; /* Creates the thin stripe effect */
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #A1A1A1;
+    margin: 2px 2px 2px 2px; /* Expands on hover */
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 14px;
+    margin: 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #C1C1C1;
+    min-width: 30px;
+    border-radius: 3px;
+    margin: 4px 4px 4px 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #A1A1A1;
+    margin: 2px 2px 2px 2px;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+

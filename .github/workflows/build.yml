@@ -29,18 +29,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install pyinstaller pytest
 
       - name: Run Pytest
         run: |
           pytest tests/
 
-      - name: Build Executable with PyInstaller
+      - name: Build Executable with Nuitka
         run: |
-          pyinstaller --onedir --windowed --clean --name "PDFMerger" --add-data "source/style_dark.qss;." --add-data "source/style_light.qss;." "source/main.py"
+          PYMUPDF_DIR=$(python -c "import pymupdf, os; print(os.path.dirname(pymupdf.__file__))")
+          FITZ_DIR=$(python -c "import fitz, os; print(os.path.dirname(fitz.__file__))")
+          python -m nuitka --low-memory --standalone --windows-console-mode=disable --enable-plugin=pyside6 --nofollow-import-to=pymupdf --nofollow-import-to=fitz --include-data-files="source/style_dark.qss=source/style_dark.qss" --include-data-files="source/style_light.qss=source/style_light.qss" --output-dir=nuitka_build --output-filename=PDFMerger.exe source/main.py
+          cp -r "$PYMUPDF_DIR" "nuitka_build/main.dist/pymupdf"
+          cp -r "$FITZ_DIR" "nuitka_build/main.dist/fitz"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PDFMerger-Windows
-          path: dist/PDFMerger
+          path: nuitka_build/main.dist

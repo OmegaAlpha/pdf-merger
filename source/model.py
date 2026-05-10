@@ -10,3 +10,4 @@ class PDFDocument:
     modified_dt: datetime
     pages: int
     custom_toc: List = field(default=None)
+    missing: bool = field(default=False)

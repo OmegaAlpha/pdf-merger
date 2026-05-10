@@ -1,8 +1,26 @@
 import sys
+import os
 import traceback
-from PyQt6.QtWidgets import QApplication, QMessageBox
-from PyQt6.QtCore import Qt
+
+# If running as a Nuitka standalone executable, we need to add the executable's 
+# directory to sys.path so it can find the uncompiled 'pymupdf' and 'fitz' data directories.
+if "__compiled__" in globals():
+    sys.path.insert(0, os.path.dirname(sys.executable))
+
+from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import Qt
 import fitz # Used to preload shared libraries early if needed
+
+# For Windows, ensure High DPI awareness is set before QApplication is initialized
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1) # 1 = Process_System_DPI_Aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
 
 from viewmodel import MainViewModel
 from view import MainWindow

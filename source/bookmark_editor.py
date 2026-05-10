@@ -1,10 +1,10 @@
 import sys
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTreeWidget, QTreeWidgetItem, QAbstractItemView, QMessageBox,
     QLabel
 )
-from PyQt6.QtCore import Qt
+from PySide6.QtCore import Qt
 
 class BookmarkEditorDialog(QDialog):
     def __init__(self, toc: list, max_pages: int, pdf_name: str, parent=None):

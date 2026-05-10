@@ -1,8 +1,8 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
     QComboBox, QPushButton, QDialogButtonBox
 )
-from PyQt6.QtCore import QSettings
+from PySide6.QtCore import QSettings
 
 class SettingsDialog(QDialog):
     def __init__(self, theme_manager, parent=None):
