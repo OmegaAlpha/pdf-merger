@@ -1,7 +1,7 @@
 import os
 import fitz
 import pytest
-from PyQt6.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex
 from viewmodel import PDFListViewModel, MainViewModel
 
 @pytest.fixture
@@ -46,8 +46,8 @@ def test_main_view_model_add_remove(qtbot, real_pdf):
     vm.status_message.connect(lambda msg, timeout: signals.append(msg))
     
     vm.add_pdfs([real_pdf])
+    qtbot.waitUntil(lambda: len(vm.pdf_list_model.pdfs) == 1, timeout=3000)
         
-    assert len(vm.pdf_list_model.pdfs) == 1
     assert vm.pdf_list_model.pdfs[0].name == "dummy_for_vm.pdf"
     assert any("Added 1 PDF(s)" in s for s in signals)
     

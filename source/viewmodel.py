@@ -269,6 +269,24 @@ class PDFListViewModel(QAbstractTableModel):
 
         return None
 
+    def sort(self, column, order=Qt.SortOrder.AscendingOrder):
+        if not self.pdfs:
+            return
+            
+        self.layoutAboutToBeChanged.emit()
+        
+        def sort_key(pdf):
+            if column == 0: return pdf.name.lower()
+            if column == 1: return pdf.size_kb
+            if column == 2: return pdf.modified_dt
+            if column == 3: return pdf.pages
+            return ""
+
+        reverse = (order == Qt.SortOrder.DescendingOrder)
+        self.pdfs.sort(key=sort_key, reverse=reverse)
+        
+        self.layoutChanged.emit()
+
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.headers[section]

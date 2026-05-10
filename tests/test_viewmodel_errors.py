@@ -1,6 +1,6 @@
 import os
 import pytest
-from PyQt6.QtCore import Qt, QModelIndex, QUrl, QMimeData
+from PySide6.QtCore import Qt, QModelIndex, QUrl, QMimeData
 from viewmodel import MainViewModel, PDFListViewModel, MergeWorker
 from model import PDFDocument
 from datetime import datetime
@@ -8,9 +8,9 @@ from datetime import datetime
 def test_main_view_model_add_pdfs_invalid(qtbot, tmp_path):
     vm = MainViewModel()
     
-    # Create a non-PDF file
-    text_file = tmp_path / "test.txt"
-    text_file.write_text("hello")
+    # Create a non-PDF file (zip is unlikely to be auto-converted by fitz)
+    invalid_file = tmp_path / "test.zip"
+    invalid_file.write_bytes(b"PK\x03\x04...")
     
     # Create a directory
     some_dir = tmp_path / "somedir"
@@ -20,10 +20,12 @@ def test_main_view_model_add_pdfs_invalid(qtbot, tmp_path):
     vm.status_message.connect(lambda msg, timeout: signals.append(msg))
     
     # Add them
-    vm.add_pdfs([str(text_file), str(some_dir)])
+    # Since these are invalid, the worker will finish but add 0 PDFs
+    vm.add_pdfs([str(invalid_file), str(some_dir)])
+    qtbot.waitUntil(lambda: any("error(s)" in s for s in signals), timeout=3000)
         
-    assert len(vm.pdf_list_model.pdfs) == 2
-    assert any("Added 2 PDF(s)" in s for s in signals)
+    assert len(vm.pdf_list_model.pdfs) == 0
+    assert any("Failed to add files" in s for s in signals)
     assert any("error(s)" in s for s in signals)
 
 def test_main_view_model_remove_out_of_bounds():
