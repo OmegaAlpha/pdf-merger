@@ -57,7 +57,7 @@ def test_merge_worker_signals(qtbot, mocker):
     # Mock engine to simulate success
     mocker.patch("viewmodel.merge_pdfs_engine", return_value=(True, "Success message"))
     
-    with qtbot.waitSignal(worker.finished, timeout=1000) as blocker:
+    with qtbot.waitSignal(worker.merge_finished, timeout=1000) as blocker:
         worker.run()
         
     assert blocker.args[0] is True
@@ -70,7 +70,7 @@ def test_merge_worker_exception(qtbot, mocker):
     # Mock engine to return error
     mocker.patch("viewmodel.merge_pdfs_engine", return_value=(False, "Simulated worker error"))
     
-    with qtbot.waitSignal(worker.finished, timeout=1000) as blocker:
+    with qtbot.waitSignal(worker.merge_finished, timeout=1000) as blocker:
         worker.run()
         
     assert blocker.args[0] is False

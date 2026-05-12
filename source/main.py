@@ -25,6 +25,7 @@ if sys.platform == "win32":
 from viewmodel import MainViewModel
 from view import MainWindow
 from theme_manager import ThemeManager
+from language_manager import LanguageManager
 
 def main():
     try:
@@ -35,11 +36,15 @@ def main():
         tm = ThemeManager(app)
         tm.apply_theme()
         
+        # Initialize Language
+        lm = LanguageManager(app)
+        lm.init_language()
+        
         # Initialize ViewModel
         vm = MainViewModel()
         
         # Initialize View
-        window = MainWindow(vm, tm)
+        window = MainWindow(vm, tm, lm)
         window.show()
         
         sys.exit(app.exec())

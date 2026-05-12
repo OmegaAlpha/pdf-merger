@@ -40,7 +40,7 @@ set /p FITZ_DIR=<fitz_dir.txt
 del fitz_dir.txt
 
 echo Starting Nuitka Compilation... Please wait, this WILL take a long time!
-echo Command: "%VENV_PYTHON%" -m nuitka --msvc=latest --low-memory --standalone --windows-console-mode=disable --enable-plugin=pyside6 --nofollow-import-to=pymupdf --nofollow-import-to=fitz --include-data-files=source/style_dark.qss=source/style_dark.qss --include-data-files=source/style_light.qss=source/style_light.qss --output-dir=nuitka_build --output-filename=PDFMerger.exe source/main.py
+echo Command: "%VENV_PYTHON%" -m nuitka --msvc=latest --low-memory --standalone --windows-console-mode=disable --enable-plugin=pyside6 --nofollow-import-to=pymupdf --nofollow-import-to=fitz --include-data-dir=translations=translations --include-data-files=source/style_dark.qss=source/style_dark.qss --include-data-files=source/style_light.qss=source/style_light.qss --output-dir=nuitka_build --output-filename=PDFMerger.exe source/main.py
 echo ------------------------------------------------------------
 
 REM Run Nuitka
@@ -52,6 +52,7 @@ call "%VENV_PYTHON%" -m nuitka ^
   --enable-plugin=pyside6 ^
   --nofollow-import-to=pymupdf ^
   --nofollow-import-to=fitz ^
+  --include-data-dir=translations=translations ^
   --include-data-files=source/style_dark.qss=source/style_dark.qss ^
   --include-data-files=source/style_light.qss=source/style_light.qss ^
   --output-dir=nuitka_build ^

@@ -12,6 +12,7 @@ from PySide6.QtCore import (
     QThread,
     Signal,
     QSettings,
+    QCoreApplication,
 )
 from PySide6.QtGui import QImage
 
@@ -21,7 +22,7 @@ from project_manager import save_project, load_project, refresh_pdf_metadata, ve
 
 class AddPDFWorker(QThread):
     progress = Signal(PDFDocument)
-    finished = Signal(int, int) # added, errors
+    load_finished = Signal(int, int) # added, errors
     
     def __init__(self, file_paths: List[str], existing_paths: set):
         super().__init__()
@@ -63,11 +64,11 @@ class AddPDFWorker(QThread):
             except Exception as e:
                 print(f"Error loading PDF metadata for {file_path}: {e}")
                 error_count += 1
-        self.finished.emit(added_count, error_count)
+        self.load_finished.emit(added_count, error_count)
 
 
 class MergeWorker(QThread):
-    finished = Signal(bool, str)
+    merge_finished = Signal(bool, str)
 
     def __init__(self, pdf_list: List[PDFDocument], output_path: str):
         super().__init__()
@@ -76,7 +77,7 @@ class MergeWorker(QThread):
 
     def run(self):
         success, message = merge_pdfs_engine(self.pdf_list, self.output_path)
-        self.finished.emit(success, message)
+        self.merge_finished.emit(success, message)
 
 
 class ThumbnailWorker(QThread):
@@ -138,7 +139,7 @@ class ThumbnailWorker(QThread):
 
 
 class TOCWorker(QThread):
-    finished = Signal(list, int, str)
+    toc_finished = Signal(list, int, str)
     
     def __init__(self, row: int, file_path: str, pages: int, name: str):
         super().__init__()
@@ -159,7 +160,7 @@ class TOCWorker(QThread):
         if not toc:
             toc = [[1, os.path.splitext(self.name)[0], 1]]
             
-        self.finished.emit(toc, self.pages, self.name)
+        self.toc_finished.emit(toc, self.pages, self.name)
 
 
 class PDFListViewModel(QAbstractTableModel):
@@ -349,6 +350,61 @@ class MainViewModel(QObject):
         self.thumbnail_worker = None
         self.thumbnail_cache = {}
         self._current_preview_file = None
+        self._active_workers = [] # Track running threads to prevent crash on destruction
+
+    def _safe_abandon_worker(self, worker):
+        """Safely orphan a worker thread so it can finish its current task and clean itself up."""
+        if not worker:
+            return
+            
+        try:
+            # Check if the C++ object still exists
+            is_running = worker.isRunning()
+        except RuntimeError:
+            # "Internal C++ object already deleted" - nothing to abandon
+            return
+
+        if is_running:
+            # Signal cancellation if supported
+            if hasattr(worker, "cancel"):
+                worker.cancel()
+            
+            # Disconnect all signals to avoid stale UI updates from orphaned worker.
+            # Note: This also disconnects the built-in finished signal, so we 
+            # must reconnect our cleanup handler after this.
+            try:
+                worker.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+                
+            # Keep a reference to the Python object so it isn't garbage collected
+            # until the background thread actually returns from its run() method.
+            self._active_workers.append(worker)
+            
+            # Connect the thread's finished signal to our final cleanup routine.
+            worker.finished.connect(lambda *args, w=worker: self._on_abandoned_worker_finished(w))
+            
+            # Double-check: if the thread finished while we were disconnecting/connecting,
+            # the signal might have been lost or invalidated.
+            if not worker.isRunning():
+                self._on_abandoned_worker_finished(worker)
+        else:
+            # Thread not running, just schedule for deletion
+            worker.deleteLater()
+
+    def _on_abandoned_worker_finished(self, worker):
+        """Final cleanup for an abandoned worker thread."""
+        if worker in self._active_workers:
+            self._active_workers.remove(worker)
+        try:
+            worker.deleteLater()
+        except RuntimeError:
+            pass
+
+    def _clear_thumbnail_worker_ref(self, worker):
+        """Clear the current thumbnail worker reference if it's the one that just finished."""
+        if self.thumbnail_worker == worker:
+            self.thumbnail_worker = None
 
     def request_thumbnails(self, file_path: str):
         self._current_preview_file = file_path
@@ -358,14 +414,9 @@ class MainViewModel(QObject):
             return
 
         # Stop previous worker if running
-        if self.thumbnail_worker and self.thumbnail_worker.isRunning():
-            self.thumbnail_worker.cancel()
-            try:
-                self.thumbnail_worker.thumbnail_ready.disconnect()
-            except:
-                pass
-            self.thumbnail_worker.deleteLater()
-        self.thumbnail_worker = None
+        if self.thumbnail_worker:
+            self._safe_abandon_worker(self.thumbnail_worker)
+            self.thumbnail_worker = None
             
         total_pages_to_show = pdf.pages
         self.thumbnail_started.emit(total_pages_to_show)
@@ -384,6 +435,8 @@ class MainViewModel(QObject):
 
         self.thumbnail_worker = ThumbnailWorker(file_path, missing_pages)
         self.thumbnail_worker.thumbnail_ready.connect(self._on_thumbnail_worker_ready)
+        self.thumbnail_worker.finished.connect(self.thumbnail_worker.deleteLater)
+        self.thumbnail_worker.finished.connect(lambda w=self.thumbnail_worker: self._clear_thumbnail_worker_ref(w))
         self.thumbnail_worker.start(QThread.Priority.LowPriority)
 
     def _on_thumbnail_worker_ready(self, file_path: str, page_num: int, data: object):
@@ -423,14 +476,21 @@ class MainViewModel(QObject):
             self.toc_ready.emit(row, pdf.custom_toc, pdf.pages, pdf.name)
             return
             
-        self.status_message.emit(f"Reading bookmarks for {pdf.name}...", 0)
+        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Reading bookmarks for {0}...").format(pdf.name), 0)
+        
+        if hasattr(self, 'toc_worker') and self.toc_worker:
+            self._safe_abandon_worker(self.toc_worker)
+            
         self.toc_worker = TOCWorker(row, pdf.file_path, pdf.pages, pdf.name)
-        self.toc_worker.finished.connect(lambda toc, pages, name: self._on_toc_ready(row, toc, pages, name))
+        self.toc_worker.toc_finished.connect(lambda toc, pages, name: self._on_toc_ready(row, toc, pages, name))
+        self.toc_worker.finished.connect(self.toc_worker.deleteLater)
         self.toc_worker.start()
 
     def _on_toc_ready(self, row: int, toc: list, pages: int, name: str):
-        self.status_message.emit("Bookmarks loaded.", 3000)
+        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Bookmarks loaded."), 3000)
         self.toc_ready.emit(row, toc, pages, name)
+        if self.toc_worker:
+            self.toc_worker.deleteLater()
         self.toc_worker = None
 
     def set_custom_toc_for_pdf(self, row: int, toc: list):
@@ -440,14 +500,19 @@ class MainViewModel(QObject):
     def add_pdfs(self, file_paths: List[str]):
         if not file_paths: return
 
+        if self.add_worker:
+            self._safe_abandon_worker(self.add_worker)
+            self.add_worker = None
+
         existing_paths = {pdf.file_path for pdf in self.pdf_list_model.pdfs}
         
         # Move long-running file operations to a background thread
         self.add_worker = AddPDFWorker(file_paths, existing_paths)
         self.add_worker.progress.connect(self._on_pdf_load_progress)
-        self.add_worker.finished.connect(self._on_pdf_load_finished)
+        self.add_worker.load_finished.connect(self._on_pdf_load_finished)
+        self.add_worker.finished.connect(self.add_worker.deleteLater)
         
-        self.status_message.emit(f"Analyzing {len(file_paths)} file(s)...", 0)
+        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Analyzing {0} file(s)...").format(len(file_paths)), 0)
         self.add_worker.start()
 
     def _on_pdf_load_progress(self, pdf: PDFDocument):
@@ -466,14 +531,18 @@ class MainViewModel(QObject):
 
     def _on_pdf_load_finished(self, added: int, errors: int):
         if added > 0:
-            msg = f"Added {added} PDF(s)." + (f" {errors} error(s)." if errors else "")
+            msg = QCoreApplication.translate("MainViewModel", "Added {0} PDF(s).").format(added)
+            if errors:
+                msg += " " + QCoreApplication.translate("MainViewModel", "{0} error(s).").format(errors)
             self.status_message.emit(msg, 5000)
         elif errors:
-            self.status_message.emit(f"Failed to add files. {errors} error(s).", 5000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Failed to add files. {0} error(s).").format(errors), 5000)
         else:
-            self.status_message.emit("Selected PDF(s) already in list.", 3000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Selected PDF(s) already in list."), 3000)
             
         self.pdfs_added.emit(added, errors)
+        if self.add_worker:
+            self.add_worker.deleteLater()
         self.add_worker = None
 
     def remove_pdfs_by_indices(self, indices: List[int]):
@@ -488,7 +557,7 @@ class MainViewModel(QObject):
                 del self.pdf_list_model.pdfs[r]
                 self.pdf_list_model.endRemoveRows()
         
-        self.status_message.emit(f"Removed {len(sorted_indices)} PDF(s)", 3000)
+        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Removed {0} PDF(s)").format(len(sorted_indices)), 3000)
 
     def move_rows(self, source_row: int, count: int, destination_child_row: int):
         # Allow programmatic or drag/drop reordering.
@@ -513,11 +582,11 @@ class MainViewModel(QObject):
             self.output_dir = directory
             self.settings.setValue("output_dir", self.output_dir)
             self.output_dir_changed.emit(self.output_dir)
-            self.status_message.emit(f"Output directory: {self.output_dir}", 3000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Output directory: {0}").format(self.output_dir), 3000)
 
     def start_merge(self, dest_filename: str):
         if not self.pdf_list_model.pdfs:
-            self.status_message.emit("No PDFs loaded.", 3000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "No PDFs loaded."), 3000)
             return
 
         if not dest_filename.lower().endswith(".pdf"):
@@ -530,7 +599,8 @@ class MainViewModel(QObject):
 
         # Keep reference to avoid garbage collection
         self.worker = MergeWorker(list(self.pdf_list_model.pdfs), output_path)
-        self.worker.finished.connect(self._on_merge_finished)
+        self.worker.merge_finished.connect(self._on_merge_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
 
     def _on_merge_finished(self, success: bool, message: str):
@@ -632,9 +702,8 @@ class MainViewModel(QObject):
         self.thumbnail_cache.clear()
 
         # Stop any running thumbnail worker
-        if self.thumbnail_worker and self.thumbnail_worker.isRunning():
-            self.thumbnail_worker.cancel()
-            self.thumbnail_worker.deleteLater()
+        if self.thumbnail_worker:
+            self._safe_abandon_worker(self.thumbnail_worker)
             self.thumbnail_worker = None
 
         # Populate the PDF list

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
 )
-from PySide6.QtCore import Qt, QSize, QSettings, QTimer
+from PySide6.QtCore import Qt, QSize, QSettings, QTimer, QEvent
 from PySide6.QtGui import QIcon, QPixmap, QImage, QAction
 
 from viewmodel import MainViewModel
@@ -30,13 +30,13 @@ from bookmark_editor import BookmarkEditorDialog
 from settings_dialog import SettingsDialog
 
 class MainWindow(QMainWindow):
-    def __init__(self, viewmodel: MainViewModel, theme_manager=None):
+    def __init__(self, viewmodel: MainViewModel, theme_manager=None, language_manager=None):
         super().__init__()
         self.vm = viewmodel
         self.theme_manager = theme_manager
+        self.language_manager = language_manager
         self._current_project_path = None
         self._app_title = "PDF Merger"
-        self.setWindowTitle(self._app_title)
         self.setMinimumSize(QSize(900, 500))
         self.setAcceptDrops(True)
 
@@ -54,8 +54,57 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._bind_viewmodel()
         
+        self.retranslateUi()
+
         if self.theme_manager:
             self.theme_manager.apply_window_theme(self)
+
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        self.setWindowTitle(self._app_title if not self._current_project_path else f"{self._app_title} — {os.path.splitext(os.path.basename(self._current_project_path))[0]}")
+        
+        if hasattr(self, 'file_menu'):
+            self.file_menu.setTitle(self.tr("&File"))
+            self.open_project_action.setText(self.tr("Open Project..."))
+            self.save_project_action.setText(self.tr("Save Project"))
+            self.save_as_action.setText(self.tr("Save Project As..."))
+            self.settings_action.setText(self.tr("Settings..."))
+            
+        if hasattr(self, 'empty_label'):
+            self.empty_label.setText(self.tr("Drag and drop PDF files here\nor click 'Add PDFs' to begin"))
+            
+        if hasattr(self, 'preview_label'):
+            self.preview_label.setText(self.tr("Page Previews"))
+            
+        if hasattr(self, 'add_btn'):
+            self.add_btn.setText(self.tr(" Add PDFs"))
+            self.remove_btn.setText(self.tr(" Remove Selected"))
+            
+            preview_visible = self.preview_pane.isVisible()
+            self.toggle_preview_btn.setText(self.tr(" Hide Preview") if preview_visible else self.tr(" Show Preview"))
+            
+            self.edit_bookmarks_btn.setText(self.tr(" Edit Bookmarks"))
+            self.merge_btn.setText(self.tr(" Merge PDFs"))
+            
+        if hasattr(self, 'output_label'):
+            self.output_label.setText(self.tr("Output File:"))
+            self.output_dir_btn.setText(self.tr(" Set Output Directory"))
+
+        # Update table headers
+        if hasattr(self, 'pdf_table'):
+            model = self.vm.pdf_list_model
+            model.headers = [
+                self.tr("Name"), 
+                self.tr("Size (KB)"), 
+                self.tr("Modified Date"), 
+                self.tr("Pages")
+            ]
+            model.headerDataChanged.emit(Qt.Orientation.Horizontal, 0, 3)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -77,28 +126,28 @@ class MainWindow(QMainWindow):
 
     def _setup_menubar(self):
         menubar = self.menuBar()
-        file_menu = menubar.addMenu("&File")
+        self.file_menu = menubar.addMenu("")
 
-        open_project_action = QAction("Open Project...", self)
-        open_project_action.setShortcut("Ctrl+O")
-        open_project_action.triggered.connect(self.on_open_project)
-        file_menu.addAction(open_project_action)
+        self.open_project_action = QAction("", self)
+        self.open_project_action.setShortcut("Ctrl+O")
+        self.open_project_action.triggered.connect(self.on_open_project)
+        self.file_menu.addAction(self.open_project_action)
 
-        save_project_action = QAction("Save Project", self)
-        save_project_action.setShortcut("Ctrl+S")
-        save_project_action.triggered.connect(self.on_save_project)
-        file_menu.addAction(save_project_action)
+        self.save_project_action = QAction("", self)
+        self.save_project_action.setShortcut("Ctrl+S")
+        self.save_project_action.triggered.connect(self.on_save_project)
+        self.file_menu.addAction(self.save_project_action)
 
-        save_as_action = QAction("Save Project As...", self)
-        save_as_action.setShortcut("Ctrl+Shift+S")
-        save_as_action.triggered.connect(self.on_save_project_as)
-        file_menu.addAction(save_as_action)
+        self.save_as_action = QAction("", self)
+        self.save_as_action.setShortcut("Ctrl+Shift+S")
+        self.save_as_action.triggered.connect(self.on_save_project_as)
+        self.file_menu.addAction(self.save_as_action)
 
-        file_menu.addSeparator()
+        self.file_menu.addSeparator()
         
-        settings_action = QAction("Settings...", self)
-        settings_action.triggered.connect(self.on_settings_open)
-        file_menu.addAction(settings_action)
+        self.settings_action = QAction("", self)
+        self.settings_action.triggered.connect(self.on_settings_open)
+        self.file_menu.addAction(self.settings_action)
 
     def _setup_ui(self):
         # Table view setup
@@ -140,7 +189,7 @@ class MainWindow(QMainWindow):
         table_layout.setContentsMargins(0, 0, 0, 0)
         table_layout.addWidget(self.pdf_table, 0, 0)
         
-        self.empty_label = QLabel("Drag and drop PDF files here\nor click 'Add PDFs' to begin")
+        self.empty_label = QLabel("")
         self.empty_label.setObjectName("emptyStateLabel")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -155,9 +204,9 @@ class MainWindow(QMainWindow):
         preview_layout = QVBoxLayout(self.preview_pane)
         preview_layout.setContentsMargins(0, 0, 0, 0)
         
-        preview_label = QLabel("Page Previews")
-        preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        preview_layout.addWidget(preview_label)
+        self.preview_label = QLabel("")
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview_layout.addWidget(self.preview_label)
         
         self.preview_list = QListWidget()
         self.preview_list.setViewMode(QListWidget.ViewMode.IconMode)
@@ -193,21 +242,21 @@ class MainWindow(QMainWindow):
 
         # Buttons
         btn_layout = QHBoxLayout()
-        self.add_btn = QPushButton(" Add PDFs")
+        self.add_btn = QPushButton("")
         self.add_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon))
         
-        self.remove_btn = QPushButton(" Remove Selected")
+        self.remove_btn = QPushButton("")
         self.remove_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
         
-        self.toggle_preview_btn = QPushButton(" Hide Preview" if preview_visible else " Show Preview")
+        self.toggle_preview_btn = QPushButton("")
         self.toggle_preview_btn.setCheckable(True)
         self.toggle_preview_btn.setChecked(preview_visible)
         
-        self.edit_bookmarks_btn = QPushButton(" Edit Bookmarks")
+        self.edit_bookmarks_btn = QPushButton("")
         self.edit_bookmarks_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
         self.edit_bookmarks_btn.setEnabled(False)
         
-        self.merge_btn = QPushButton(" Merge PDFs")
+        self.merge_btn = QPushButton("")
         self.merge_btn.setObjectName("mergeButton")
         self.merge_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
         
@@ -220,11 +269,12 @@ class MainWindow(QMainWindow):
 
         # Output Layout
         output_layout = QHBoxLayout()
-        output_layout.addWidget(QLabel("Output File:"))
+        self.output_label = QLabel("")
+        output_layout.addWidget(self.output_label)
         self.output_name = QLineEdit("")
         
         output_layout.addWidget(self.output_name)
-        self.output_dir_btn = QPushButton(" Set Output Directory")
+        self.output_dir_btn = QPushButton("")
         self.output_dir_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         output_layout.addWidget(self.output_dir_btn)
         self.layout.addLayout(output_layout)
@@ -348,7 +398,7 @@ class MainWindow(QMainWindow):
 
     def on_add_pdfs(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Select PDF Files", self.vm.last_open_dir, "PDF Files (*.pdf)"
+            self, self.tr("Select PDF Files"), self.vm.last_open_dir, self.tr("PDF Files (*.pdf)")
         )
         if files:
             self.vm.set_last_open_dir(os.path.dirname(files[0]))
@@ -364,7 +414,7 @@ class MainWindow(QMainWindow):
         indexes = self.pdf_table.selectionModel().selectedRows()
         row_indices = [idx.row() for idx in indexes]
         if not row_indices:
-            self.statusBar().showMessage("No rows selected.", 3000)
+            self.statusBar().showMessage(self.tr("No rows selected."), 3000)
             return
         
         self.vm.remove_pdfs_by_indices(row_indices)
@@ -381,13 +431,13 @@ class MainWindow(QMainWindow):
 
         # Refresh / Update PDF(s)
         if len(indexes) == 1:
-            refresh_action = menu.addAction("Update PDF from Disk")
+            refresh_action = menu.addAction(self.tr("Update PDF from Disk"))
             refresh_action.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
             
-            relocate_action = menu.addAction("Relocate/Change PDF...")
+            relocate_action = menu.addAction(self.tr("Relocate/Change PDF..."))
             relocate_action.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         else:
-            refresh_action = menu.addAction(f"Update {len(indexes)} PDFs from Disk")
+            refresh_action = menu.addAction(self.tr("Update {0} PDFs from Disk").format(len(indexes)))
             refresh_action.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
             relocate_action = None
 
@@ -398,7 +448,7 @@ class MainWindow(QMainWindow):
         if len(indexes) == 1:
             row = indexes[0].row()
             pdf = self.vm.pdf_list_model.pdfs[row]
-            edit_bm_action = menu.addAction("Edit Bookmarks...")
+            edit_bm_action = menu.addAction(self.tr("Edit Bookmarks..."))
             edit_bm_action.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
             if pdf.missing:
                 edit_bm_action.setEnabled(False)
@@ -406,9 +456,9 @@ class MainWindow(QMainWindow):
 
         # Remove
         if len(indexes) == 1:
-            remove_action = menu.addAction("Remove")
+            remove_action = menu.addAction(self.tr("Remove"))
         else:
-            remove_action = menu.addAction(f"Remove {len(indexes)} PDFs")
+            remove_action = menu.addAction(self.tr("Remove {0} PDFs").format(len(indexes)))
         remove_action.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
 
         # Execute
@@ -435,9 +485,9 @@ class MainWindow(QMainWindow):
         
         new_path, _ = QFileDialog.getOpenFileName(
             self,
-            f"Select Replacement for {pdf.name}",
+            self.tr("Select Replacement for {0}").format(pdf.name),
             start_dir,
-            "PDF Files (*.pdf)"
+            self.tr("PDF Files (*.pdf)")
         )
         
         if new_path:
@@ -469,15 +519,15 @@ class MainWindow(QMainWindow):
         if all_changes:
             QMessageBox.information(
                 self,
-                "PDF Updated",
-                "The following changes were detected:\n\n"
+                self.tr("PDF Updated"),
+                self.tr("The following changes were detected:\n\n")
                 + "\n".join(f"\u2022 {c}" for c in all_changes)
-                + "\n\nCustom bookmarks have been preserved.",
+                + self.tr("\n\nCustom bookmarks have been preserved."),
             )
         else:
             count = len(indexes)
             self.statusBar().showMessage(
-                f"{count} PDF(s) checked — no changes detected.", 3000
+                self.tr("{0} PDF(s) checked — no changes detected.").format(count), 3000
             )
 
         # Refresh preview if visible
@@ -492,9 +542,9 @@ class MainWindow(QMainWindow):
         if self.vm.has_missing_files():
             reply = QMessageBox.warning(
                 self,
-                "Missing Files",
-                "Some PDF files in the list could not be found.\n\n"
-                "Remove or relocate the missing files (shown in red) before merging.",
+                self.tr("Missing Files"),
+                self.tr("Some PDF files in the list could not be found.\n\n") +
+                self.tr("Remove or relocate the missing files (shown in red) before merging."),
                 QMessageBox.StandardButton.Ok,
             )
             return
@@ -505,13 +555,13 @@ class MainWindow(QMainWindow):
         if os.path.exists(output_path):
             reply = QMessageBox.question(
                 self,
-                "Confirm Overwrite",
-                f"File exists:\n{output_path}\nOverwrite?",
+                self.tr("Confirm Overwrite"),
+                self.tr("File exists:\n{0}\nOverwrite?").format(output_path),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.No:
-                self.statusBar().showMessage("Merge cancelled.", 3000)
+                self.statusBar().showMessage(self.tr("Merge cancelled."), 3000)
                 return
 
         self.vm.start_merge(dest_filename)
@@ -543,7 +593,7 @@ class MainWindow(QMainWindow):
         self.preview_list.setGridSize(QSize(160, 245))
         # Pre-fill with placeholders to maintain order during parallel loading
         for i in range(total_pages):
-            item = QListWidgetItem(f"Page {i + 1}")
+            item = QListWidgetItem(self.tr("Page {0}").format(i + 1))
             item.setSizeHint(QSize(150, 235)) # Match icon area + text height
             self.preview_list.addItem(item)
         self.preview_list.setUpdatesEnabled(True)
@@ -584,7 +634,7 @@ class MainWindow(QMainWindow):
         
     def on_toggle_preview(self, checked):
         self.preview_pane.setVisible(checked)
-        self.toggle_preview_btn.setText(" Hide Preview" if checked else " Show Preview")
+        self.toggle_preview_btn.setText(self.tr(" Hide Preview") if checked else self.tr(" Show Preview"))
         
         if checked:
             indexes = self.pdf_table.selectionModel().selectedRows()
@@ -595,7 +645,7 @@ class MainWindow(QMainWindow):
 
     def on_set_output_dir(self):
         directory = QFileDialog.getExistingDirectory(
-            self, "Select Output Directory", self.vm.output_dir
+            self, self.tr("Select Output Directory"), self.vm.output_dir
         )
         if directory:
             self.vm.set_output_dir(directory)
@@ -621,14 +671,14 @@ class MainWindow(QMainWindow):
             self.vm.set_custom_toc_for_pdf(row, new_toc)
 
     def on_settings_open(self):
+        dialog = SettingsDialog(self.theme_manager, self.language_manager, self)
         if self.theme_manager:
-            dialog = SettingsDialog(self.theme_manager, self)
             self.theme_manager.apply_window_theme(dialog)
-            dialog.exec()
+        dialog.exec()
 
     # Signal handlers
     def on_output_dir_changed(self, directory: str):
-        self.output_dir_btn.setToolTip(f"Current Output Dir:\n{directory}")
+        self.output_dir_btn.setToolTip(self.tr("Current Output Dir:\n{0}").format(directory))
 
     def on_status_message(self, message: str, timeout: int):
         self.statusBar().showMessage(message, timeout)
@@ -650,9 +700,9 @@ class MainWindow(QMainWindow):
         self.progress_bar.hide()
         
         if success:
-            QMessageBox.information(self, "Merge Successful", message)
+            QMessageBox.information(self, self.tr("Merge Successful"), message)
         else:
-            QMessageBox.critical(self, "Merge Error", message)
+            QMessageBox.critical(self, self.tr("Merge Error"), message)
 
     def closeEvent(self, event):
         settings = QSettings("PDFMerger", "PDFMergerApp")
@@ -679,9 +729,9 @@ class MainWindow(QMainWindow):
         start_dir = os.path.dirname(self._current_project_path) if self._current_project_path else self.vm.output_dir
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Project As",
+            self.tr("Save Project As"),
             start_dir,
-            "PDF Merger Project (*.pdfm)",
+            self.tr("PDF Merger Project (*.pdfm)"),
         )
         if path:
             if not path.lower().endswith(".pdfm"):
@@ -694,8 +744,8 @@ class MainWindow(QMainWindow):
         if self.vm.pdf_list_model.rowCount() > 0:
             reply = QMessageBox.question(
                 self,
-                "Open Project",
-                "Opening a project will replace the current PDF list.\nContinue?",
+                self.tr("Open Project"),
+                self.tr("Opening a project will replace the current PDF list.\nContinue?"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -705,9 +755,9 @@ class MainWindow(QMainWindow):
         start_dir = os.path.dirname(self._current_project_path) if self._current_project_path else self.vm.last_open_dir
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Open Project",
+            self.tr("Open Project"),
             start_dir,
-            "PDF Merger Project (*.pdfm)",
+            self.tr("PDF Merger Project (*.pdfm)"),
         )
         if path:
             self.vm.do_load_project(path)
@@ -726,4 +776,4 @@ class MainWindow(QMainWindow):
         self._update_empty_state()
 
     def _on_project_load_warning(self, message: str):
-        QMessageBox.warning(self, "Missing Files", message)
+        QMessageBox.warning(self, self.tr("Missing Files"), message)

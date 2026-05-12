@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QAbstractItemView, QMessageBox,
     QLabel
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEvent
 
 class BookmarkEditorDialog(QDialog):
     def __init__(self, toc: list, max_pages: int, pdf_name: str, parent=None):
@@ -13,16 +13,14 @@ class BookmarkEditorDialog(QDialog):
         self.max_pages = max_pages
         self.pdf_name = pdf_name
         
-        self.setWindowTitle(f"Edit Bookmarks - {self.pdf_name}")
         self.resize(600, 400)
         
         self.layout = QVBoxLayout(self)
         
-        self.info_label = QLabel(f"Editing bookmarks for {self.pdf_name} ({self.max_pages} pages). Double-click a cell to edit.\nDrag and drop items to reorder them.")
+        self.info_label = QLabel("")
         self.layout.addWidget(self.info_label)
         
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Title", "Page"])
         self.tree.setColumnWidth(0, 400)
         
         # Enable Drag and Drop for reordering and reparenting
@@ -36,17 +34,17 @@ class BookmarkEditorDialog(QDialog):
         
         # Buttons
         btn_layout = QHBoxLayout()
-        self.add_btn = QPushButton("Add")
-        self.add_child_btn = QPushButton("Add Child")
-        self.remove_btn = QPushButton("Remove")
+        self.add_btn = QPushButton("")
+        self.add_child_btn = QPushButton("")
+        self.remove_btn = QPushButton("")
         
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.add_child_btn)
         btn_layout.addWidget(self.remove_btn)
         btn_layout.addStretch()
         
-        self.save_btn = QPushButton("Save")
-        self.cancel_btn = QPushButton("Cancel")
+        self.save_btn = QPushButton("")
+        self.cancel_btn = QPushButton("")
         btn_layout.addWidget(self.save_btn)
         btn_layout.addWidget(self.cancel_btn)
         
@@ -58,6 +56,24 @@ class BookmarkEditorDialog(QDialog):
         self.remove_btn.clicked.connect(self.on_remove)
         self.save_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
+        
+        self.retranslateUi()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        self.setWindowTitle(self.tr("Edit Bookmarks - {0}").format(self.pdf_name))
+        self.info_label.setText(self.tr("Editing bookmarks for {0} ({1} pages). Double-click a cell to edit.\nDrag and drop items to reorder them.").format(self.pdf_name, self.max_pages))
+        self.tree.setHeaderLabels([self.tr("Title"), self.tr("Page")])
+        
+        self.add_btn.setText(self.tr("Add"))
+        self.add_child_btn.setText(self.tr("Add Child"))
+        self.remove_btn.setText(self.tr("Remove"))
+        self.save_btn.setText(self.tr("Save"))
+        self.cancel_btn.setText(self.tr("Cancel"))
         
     def _populate_tree(self):
         self.tree.clear()
@@ -89,7 +105,9 @@ class BookmarkEditorDialog(QDialog):
             last_item_at_level[level] = item
             item.setExpanded(True)
             
-    def _create_new_item(self, title="New Bookmark", page="1"):
+    def _create_new_item(self, title=None, page="1"):
+        if title is None:
+            title = self.tr("New Bookmark")
         item = QTreeWidgetItem([title, page])
         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
         return item
@@ -145,7 +163,7 @@ class BookmarkEditorDialog(QDialog):
         def traverse(item, level):
             title = item.text(0).strip()
             if not title:
-                title = "Untitled"
+                title = self.tr("Untitled")
                 
             try:
                 page = int(item.text(1))
