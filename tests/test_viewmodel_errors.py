@@ -52,7 +52,7 @@ def test_main_view_model_start_merge_empty(qtbot):
 
 def test_merge_worker_signals(qtbot, mocker):
     docs = [PDFDocument("dummy.pdf", "dummy.pdf", 1.0, datetime.now(), 1)]
-    worker = MergeWorker(docs, "output.pdf")
+    worker = MergeWorker(docs, "output.pdf", [])
     
     # Mock engine to simulate success
     mocker.patch("viewmodel.merge_pdfs_engine", return_value=(True, "Success message"))
@@ -65,7 +65,7 @@ def test_merge_worker_signals(qtbot, mocker):
 
 def test_merge_worker_exception(qtbot, mocker):
     docs = [PDFDocument("dummy.pdf", "dummy.pdf", 1.0, datetime.now(), 1)]
-    worker = MergeWorker(docs, "output.pdf")
+    worker = MergeWorker(docs, "output.pdf", [])
     
     # Mock engine to return error
     mocker.patch("viewmodel.merge_pdfs_engine", return_value=(False, "Simulated worker error"))

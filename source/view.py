@@ -26,7 +26,7 @@ from PySide6.QtCore import Qt, QSize, QSettings, QTimer, QEvent
 from PySide6.QtGui import QIcon, QPixmap, QImage, QAction
 
 from viewmodel import MainViewModel
-from bookmark_editor import BookmarkEditorDialog
+from bookmarks_pane import BookmarksPane
 from settings_dialog import SettingsDialog
 
 class MainWindow(QMainWindow):
@@ -88,7 +88,10 @@ class MainWindow(QMainWindow):
             preview_visible = self.preview_pane.isVisible()
             self.toggle_preview_btn.setText(self.tr(" Hide Preview") if preview_visible else self.tr(" Show Preview"))
             
-            self.edit_bookmarks_btn.setText(self.tr(" Edit Bookmarks"))
+            bookmarks_visible = self.bookmarks_pane.isVisible()
+            self.toggle_bookmarks_btn.setText(self.tr(" Hide Bookmarks") if bookmarks_visible else self.tr(" Show Bookmarks"))
+            
+            self.bookmarks_pane.retranslateUi()
             self.merge_btn.setText(self.tr(" Merge PDFs"))
             
         if hasattr(self, 'output_label'):
@@ -198,15 +201,32 @@ class MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.layout.addWidget(self.splitter)
         
+        self.bookmarks_pane = BookmarksPane(self.vm)
+        self.splitter.addWidget(self.bookmarks_pane)
+        
         self.splitter.addWidget(table_container)
         
         self.preview_pane = QWidget()
         preview_layout = QVBoxLayout(self.preview_pane)
         preview_layout.setContentsMargins(0, 0, 0, 0)
         
+        preview_header_layout = QHBoxLayout()
+        preview_header_layout.setContentsMargins(5, 5, 5, 5)
+        
         self.preview_label = QLabel("")
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        preview_layout.addWidget(self.preview_label)
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        preview_header_layout.addWidget(self.preview_label)
+        
+        preview_header_layout.addStretch()
+        
+        self.preview_close_btn = QPushButton("✕")
+        self.preview_close_btn.setObjectName("closePaneButton")
+        self.preview_close_btn.setFlat(True)
+        self.preview_close_btn.setFixedSize(20, 20)
+        self.preview_close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        preview_header_layout.addWidget(self.preview_close_btn)
+        
+        preview_layout.addLayout(preview_header_layout)
         
         self.preview_list = QListWidget()
         self.preview_list.setViewMode(QListWidget.ViewMode.IconMode)
@@ -221,14 +241,17 @@ class MainWindow(QMainWindow):
         
         # Restore splitter state
         settings = QSettings("PDFMerger", "PDFMergerApp")
-        splitter_state = settings.value("splitter_state")
+        splitter_state = settings.value("splitter_state_v2")
         if splitter_state:
             self.splitter.restoreState(splitter_state)
         else:
-            self.splitter.setSizes([500, 350])
+            self.splitter.setSizes([300, 500, 350])
             
         preview_visible = settings.value("preview_visible", True, type=bool)
         self.preview_pane.setVisible(preview_visible)
+        
+        bookmarks_visible = settings.value("bookmarks_visible", True, type=bool)
+        self.bookmarks_pane.setVisible(bookmarks_visible)
 
         # Restore window geometry
         geometry = settings.value("window_geometry")
@@ -252,9 +275,13 @@ class MainWindow(QMainWindow):
         self.toggle_preview_btn.setCheckable(True)
         self.toggle_preview_btn.setChecked(preview_visible)
         
-        self.edit_bookmarks_btn = QPushButton("")
-        self.edit_bookmarks_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
-        self.edit_bookmarks_btn.setEnabled(False)
+        self.toggle_bookmarks_btn = QPushButton("")
+        self.toggle_bookmarks_btn.setCheckable(True)
+        self.toggle_bookmarks_btn.setChecked(bookmarks_visible)
+        self.toggle_bookmarks_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
+        
+        self.bookmarks_pane.closed.connect(lambda: self.toggle_bookmarks_btn.setChecked(False))
+        self.preview_close_btn.clicked.connect(lambda: self.toggle_preview_btn.setChecked(False))
         
         self.merge_btn = QPushButton("")
         self.merge_btn.setObjectName("mergeButton")
@@ -262,7 +289,7 @@ class MainWindow(QMainWindow):
         
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.remove_btn)
-        btn_layout.addWidget(self.edit_bookmarks_btn)
+        btn_layout.addWidget(self.toggle_bookmarks_btn)
         btn_layout.addWidget(self.toggle_preview_btn)
         btn_layout.addWidget(self.merge_btn)
         self.layout.addLayout(btn_layout)
@@ -348,10 +375,10 @@ class MainWindow(QMainWindow):
         # View bindings (UI events to ViewModel methods)
         self.add_btn.clicked.connect(self.on_add_pdfs)
         self.remove_btn.clicked.connect(self.on_remove_pdfs)
-        self.edit_bookmarks_btn.clicked.connect(self.on_edit_bookmarks)
         self.merge_btn.clicked.connect(self.on_merge)
         self.output_dir_btn.clicked.connect(self.on_set_output_dir)
         self.toggle_preview_btn.toggled.connect(self.on_toggle_preview)
+        self.toggle_bookmarks_btn.toggled.connect(self.on_toggle_bookmarks)
         
         self.pdf_table.selectionModel().selectionChanged.connect(self.on_table_selection_changed)
 
@@ -365,7 +392,6 @@ class MainWindow(QMainWindow):
         self.vm.thumbnail_batch_ready.connect(self.on_thumbnail_batch_ready)
         self.vm.thumbnail_cache_ready.connect(self.on_thumbnail_cache_ready)
         self.vm.pdfs_added.connect(self.on_pdfs_added_finished)
-        self.vm.toc_ready.connect(self.on_toc_ready)
 
         # Empty state bindings
         self.vm.pdf_list_model.rowsInserted.connect(self._on_rows_inserted)
@@ -443,16 +469,7 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
-        # Edit Bookmarks (single selection only)
-        edit_bm_action = None
-        if len(indexes) == 1:
-            row = indexes[0].row()
-            pdf = self.vm.pdf_list_model.pdfs[row]
-            edit_bm_action = menu.addAction(self.tr("Edit Bookmarks..."))
-            edit_bm_action.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView))
-            if pdf.missing:
-                edit_bm_action.setEnabled(False)
-            menu.addSeparator()
+        menu.addSeparator()
 
         # Remove
         if len(indexes) == 1:
@@ -470,8 +487,6 @@ class MainWindow(QMainWindow):
             self._on_refresh_selected_pdfs(indexes)
         elif action == relocate_action:
             self._on_change_pdf_path(indexes[0].row())
-        elif action == edit_bm_action:
-            self.on_edit_bookmarks()
         elif action == remove_action:
             self.on_remove_pdfs()
 
@@ -538,28 +553,31 @@ class MainWindow(QMainWindow):
                 self.vm.request_thumbnails(pdf.file_path)
 
     def on_merge(self):
-        # Guard: warn if there are missing files
         if self.vm.has_missing_files():
-            reply = QMessageBox.warning(
-                self,
-                self.tr("Missing Files"),
-                self.tr("Some PDF files in the list could not be found.\n\n") +
-                self.tr("Remove or relocate the missing files (shown in red) before merging."),
-                QMessageBox.StandardButton.Ok,
-            )
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle(self.tr("Missing Files"))
+            msg_box.setText(self.tr("Some PDF files in the list could not be found.\n\n") +
+                            self.tr("Remove or relocate the missing files (shown in red) before merging."))
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg_box.button(QMessageBox.StandardButton.Ok).setText(self.tr("OK"))
+            msg_box.exec()
             return
 
-        dest_filename = self.output_name.text().strip() or "merged_output.pdf"
+        dest_filename = self.output_name.text().strip() or self.tr("merged_output.pdf")
         output_path = os.path.join(self.vm.output_dir, dest_filename)
 
         if os.path.exists(output_path):
-            reply = QMessageBox.question(
-                self,
-                self.tr("Confirm Overwrite"),
-                self.tr("File exists:\n{0}\nOverwrite?").format(output_path),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            msg_box.setWindowTitle(self.tr("Confirm Overwrite"))
+            msg_box.setText(self.tr("File exists:\n{0}\nOverwrite?").format(output_path))
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+            msg_box.button(QMessageBox.StandardButton.Yes).setText(self.tr("Yes"))
+            msg_box.button(QMessageBox.StandardButton.No).setText(self.tr("No"))
+            reply = msg_box.exec()
+            
             if reply == QMessageBox.StandardButton.No:
                 self.statusBar().showMessage(self.tr("Merge cancelled."), 3000)
                 return
@@ -572,8 +590,6 @@ class MainWindow(QMainWindow):
 
     def _on_selection_timer_timeout(self):
         indexes = self.pdf_table.selectionModel().selectedRows()
-        
-        self.edit_bookmarks_btn.setEnabled(len(indexes) == 1)
         
         if not indexes:
             self.preview_list.clear()
@@ -643,6 +659,10 @@ class MainWindow(QMainWindow):
                 pdf = self.vm.pdf_list_model.pdfs[row]
                 self.vm.request_thumbnails(pdf.file_path)
 
+    def on_toggle_bookmarks(self, checked):
+        self.bookmarks_pane.setVisible(checked)
+        self.toggle_bookmarks_btn.setText(self.tr(" Hide Bookmarks") if checked else self.tr(" Show Bookmarks"))
+
     def on_set_output_dir(self):
         directory = QFileDialog.getExistingDirectory(
             self, self.tr("Select Output Directory"), self.vm.output_dir
@@ -650,25 +670,7 @@ class MainWindow(QMainWindow):
         if directory:
             self.vm.set_output_dir(directory)
 
-    def on_edit_bookmarks(self):
-        indexes = self.pdf_table.selectionModel().selectedRows()
-        if not indexes: return
-        row = indexes[0].row()
-        
-        self.edit_bookmarks_btn.setEnabled(False)
-        self.vm.request_toc(row)
 
-    def on_toc_ready(self, row: int, toc: list, max_pages: int, name: str):
-        self.edit_bookmarks_btn.setEnabled(True)
-        
-        from PySide6.QtWidgets import QDialog
-        dialog = BookmarkEditorDialog(toc, max_pages, name, self)
-        if self.theme_manager:
-            self.theme_manager.apply_window_theme(dialog)
-        
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            new_toc = dialog.get_updated_toc()
-            self.vm.set_custom_toc_for_pdf(row, new_toc)
 
     def on_settings_open(self):
         dialog = SettingsDialog(self.theme_manager, self.language_manager, self)
@@ -706,8 +708,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         settings = QSettings("PDFMerger", "PDFMergerApp")
-        settings.setValue("splitter_state", self.splitter.saveState())
+        settings.setValue("splitter_state_v2", self.splitter.saveState())
         settings.setValue("preview_visible", self.preview_pane.isVisible())
+        settings.setValue("bookmarks_visible", self.bookmarks_pane.isVisible())
         settings.setValue("window_geometry", self.saveGeometry())
         settings.setValue("header_state", self.pdf_table.horizontalHeader().saveState())
         super().closeEvent(event)
@@ -742,13 +745,16 @@ class MainWindow(QMainWindow):
         """Prompt the user for a project file to load."""
         # Warn if there are PDFs in the current list
         if self.vm.pdf_list_model.rowCount() > 0:
-            reply = QMessageBox.question(
-                self,
-                self.tr("Open Project"),
-                self.tr("Opening a project will replace the current PDF list.\nContinue?"),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Icon.Question)
+            msg_box.setWindowTitle(self.tr("Open Project"))
+            msg_box.setText(self.tr("Opening a project will replace the current PDF list.\nContinue?"))
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+            msg_box.button(QMessageBox.StandardButton.Yes).setText(self.tr("Yes"))
+            msg_box.button(QMessageBox.StandardButton.No).setText(self.tr("No"))
+            reply = msg_box.exec()
+            
             if reply == QMessageBox.StandardButton.No:
                 return
 

@@ -8,7 +8,7 @@ if "__compiled__" in globals():
     sys.path.insert(0, os.path.dirname(sys.executable))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QCoreApplication
 import fitz # Used to preload shared libraries early if needed
 
 # For Windows, ensure High DPI awareness is set before QApplication is initialized
@@ -33,6 +33,9 @@ def main():
             QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         app = QApplication(sys.argv)
         
+        from PySide6.QtWidgets import QStyleFactory
+        app.setStyle(QStyleFactory.create("Fusion")) # This fixes a lot of UI rendering issues by forcing Qt to use its own style engine instead of the OS default.
+        
         tm = ThemeManager(app)
         tm.apply_theme()
         
@@ -54,9 +57,9 @@ def main():
         try:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Icon.Critical)
-            msg_box.setText("A critical error occurred.")
-            msg_box.setInformativeText(f"Details:\n{e}\n\nSee console for full traceback.")
-            msg_box.setWindowTitle("Application Error")
+            msg_box.setText(QCoreApplication.translate("main", "A critical error occurred."))
+            msg_box.setInformativeText(QCoreApplication.translate("main", "Details:\n{0}\n\nSee console for full traceback.").format(e))
+            msg_box.setWindowTitle(QCoreApplication.translate("main", "Application Error"))
             msg_box.exec()
         except:
             pass

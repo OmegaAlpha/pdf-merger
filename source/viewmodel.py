@@ -16,7 +16,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QImage
 
-from model import PDFDocument
+from model import PDFDocument, BookmarkItem
 from engine import merge_pdfs_engine
 from project_manager import save_project, load_project, refresh_pdf_metadata, verify_all_pdf_metadata
 
@@ -47,9 +47,9 @@ class AddPDFWorker(QThread):
                 file_size_kb = file_stats.st_size / 1024.0
                 modified_dt = datetime.fromtimestamp(file_stats.st_mtime)
                 
-                # Opening PDF on network might be slow
                 doc = fitz.open(file_path)
                 pages = doc.page_count
+                toc = doc.get_toc(simple=False)
                 doc.close()
 
                 pdf = PDFDocument(
@@ -57,7 +57,8 @@ class AddPDFWorker(QThread):
                     name=file_name,
                     size_kb=file_size_kb,
                     modified_dt=modified_dt,
-                    pages=pages
+                    pages=pages,
+                    custom_toc=toc
                 )
                 self.progress.emit(pdf)
                 added_count += 1
@@ -70,13 +71,14 @@ class AddPDFWorker(QThread):
 class MergeWorker(QThread):
     merge_finished = Signal(bool, str)
 
-    def __init__(self, pdf_list: List[PDFDocument], output_path: str):
+    def __init__(self, pdf_list: List[PDFDocument], output_path: str, global_toc: List[BookmarkItem]):
         super().__init__()
         self.pdf_list = pdf_list
         self.output_path = output_path
+        self.global_toc = global_toc
 
     def run(self):
-        success, message = merge_pdfs_engine(self.pdf_list, self.output_path)
+        success, message = merge_pdfs_engine(self.pdf_list, self.output_path, self.global_toc)
         self.merge_finished.emit(success, message)
 
 
@@ -138,29 +140,7 @@ class ThumbnailWorker(QThread):
             print(f"Error generating thumbnails for {self.file_path}: {e}")
 
 
-class TOCWorker(QThread):
-    toc_finished = Signal(list, int, str)
-    
-    def __init__(self, row: int, file_path: str, pages: int, name: str):
-        super().__init__()
-        self.row = row
-        self.file_path = file_path
-        self.pages = pages
-        self.name = name
-        
-    def run(self):
-        toc = []
-        try:
-            doc = fitz.open(self.file_path)
-            toc = doc.get_toc(simple=False)
-            doc.close()
-        except Exception as e:
-            print(f"Error reading TOC for {self.name}: {e}")
-            
-        if not toc:
-            toc = [[1, os.path.splitext(self.name)[0], 1]]
-            
-        self.toc_finished.emit(toc, self.pages, self.name)
+
 
 
 class PDFListViewModel(QAbstractTableModel):
@@ -247,7 +227,7 @@ class PDFListViewModel(QAbstractTableModel):
 
         elif role == Qt.ItemDataRole.ToolTipRole:
             if pdf.missing:
-                return f"FILE NOT FOUND\nPath: {pdf.file_path}"
+                return QCoreApplication.translate("PDFListViewModel", "FILE NOT FOUND\nPath: {0}").format(pdf.file_path)
             if col == 0:
                 return f"Path: {pdf.file_path}\nName: {pdf.name}"
             elif col == 1:
@@ -331,7 +311,7 @@ class MainViewModel(QObject):
     thumbnail_batch_ready = Signal(object)
     thumbnail_started = Signal(int) # Now includes total pages
     pdfs_added = Signal(int, int) # added, errors
-    toc_ready = Signal(int, list, int, str) # row, toc, pages, name
+    global_toc_changed = Signal()
 
     # Project signals
     project_loaded = Signal(str, str)   # project file path, output_name
@@ -351,6 +331,27 @@ class MainViewModel(QObject):
         self.thumbnail_cache = {}
         self._current_preview_file = None
         self._active_workers = [] # Track running threads to prevent crash on destruction
+        self.global_toc: List[BookmarkItem] = []
+        
+        self.pdf_list_model.layoutChanged.connect(self._sync_global_toc_order)
+        self.pdf_list_model.rowsMoved.connect(self._sync_global_toc_order)
+
+    def _sync_global_toc_order(self, *args, **kwargs):
+        if not self.global_toc:
+            return
+            
+        new_global_toc = []
+        for pdf in self.pdf_list_model.pdfs:
+            pdf_bookmarks = [bm for bm in self.global_toc if bm.source_pdf == pdf]
+            new_global_toc.extend(pdf_bookmarks)
+            
+        # Add any bookmarks whose PDFs somehow aren't in the list anymore (just in case)
+        for bm in self.global_toc:
+            if bm not in new_global_toc:
+                new_global_toc.append(bm)
+                
+        self.global_toc = new_global_toc
+        self.global_toc_changed.emit()
 
     def _safe_abandon_worker(self, worker):
         """Safely orphan a worker thread so it can finish its current task and clean itself up."""
@@ -465,37 +466,7 @@ class MainViewModel(QObject):
             self.last_open_dir = directory
             self.settings.setValue("last_open_dir", self.last_open_dir)
 
-    def request_toc(self, row: int):
-        if not (0 <= row < len(self.pdf_list_model.pdfs)):
-            return
-            
-        pdf = self.pdf_list_model.pdfs[row]
-        if pdf.missing:
-            return
-        if pdf.custom_toc is not None:
-            self.toc_ready.emit(row, pdf.custom_toc, pdf.pages, pdf.name)
-            return
-            
-        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Reading bookmarks for {0}...").format(pdf.name), 0)
-        
-        if hasattr(self, 'toc_worker') and self.toc_worker:
-            self._safe_abandon_worker(self.toc_worker)
-            
-        self.toc_worker = TOCWorker(row, pdf.file_path, pdf.pages, pdf.name)
-        self.toc_worker.toc_finished.connect(lambda toc, pages, name: self._on_toc_ready(row, toc, pages, name))
-        self.toc_worker.finished.connect(self.toc_worker.deleteLater)
-        self.toc_worker.start()
 
-    def _on_toc_ready(self, row: int, toc: list, pages: int, name: str):
-        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Bookmarks loaded."), 3000)
-        self.toc_ready.emit(row, toc, pages, name)
-        if self.toc_worker:
-            self.toc_worker.deleteLater()
-        self.toc_worker = None
-
-    def set_custom_toc_for_pdf(self, row: int, toc: list):
-        if 0 <= row < len(self.pdf_list_model.pdfs):
-            self.pdf_list_model.pdfs[row].custom_toc = toc
 
     def add_pdfs(self, file_paths: List[str]):
         if not file_paths: return
@@ -525,6 +496,16 @@ class MainViewModel(QObject):
         self.pdf_list_model.pdfs.append(pdf)
         self.pdf_list_model.endInsertRows()
         
+        # Add to global_toc
+        if pdf.custom_toc:
+            for item in pdf.custom_toc:
+                if len(item) >= 3:
+                    lvl, title, page = item[0], item[1], item[2]
+                    self.global_toc.append(BookmarkItem(title=str(title), page=int(page), level=int(lvl), source_pdf=pdf))
+        else:
+            self.global_toc.append(BookmarkItem(title=os.path.splitext(pdf.name)[0], page=1, level=1, source_pdf=pdf))
+        self.global_toc_changed.emit()
+        
         # If it's the first one, update output dir
         if len(self.pdf_list_model.pdfs) == 1:
             self.set_output_dir(os.path.dirname(pdf.file_path))
@@ -548,14 +529,20 @@ class MainViewModel(QObject):
     def remove_pdfs_by_indices(self, indices: List[int]):
         # Sort indices in descending order so removal doesn't shift remaining targets
         sorted_indices = sorted(indices, reverse=True)
+        removed_pdfs = []
         for r in sorted_indices:
             if 0 <= r < len(self.pdf_list_model.pdfs):
                 pdf = self.pdf_list_model.pdfs[r]
+                removed_pdfs.append(pdf)
                 if pdf.file_path in self.thumbnail_cache:
                     del self.thumbnail_cache[pdf.file_path]
                 self.pdf_list_model.beginRemoveRows(QModelIndex(), r, r)
                 del self.pdf_list_model.pdfs[r]
                 self.pdf_list_model.endRemoveRows()
+        
+        if removed_pdfs:
+            self.global_toc = [bm for bm in self.global_toc if bm.source_pdf not in removed_pdfs]
+            self.global_toc_changed.emit()
         
         self.status_message.emit(QCoreApplication.translate("MainViewModel", "Removed {0} PDF(s)").format(len(sorted_indices)), 3000)
 
@@ -595,10 +582,10 @@ class MainViewModel(QObject):
         output_path = os.path.join(self.output_dir, dest_filename)
 
         self.merge_started.emit()
-        self.status_message.emit("Merging started in background...", 0)
+        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Merging started in background..."), 0)
 
         # Keep reference to avoid garbage collection
-        self.worker = MergeWorker(list(self.pdf_list_model.pdfs), output_path)
+        self.worker = MergeWorker(list(self.pdf_list_model.pdfs), output_path, self.global_toc)
         self.worker.merge_finished.connect(self._on_merge_finished)
         self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
@@ -606,7 +593,6 @@ class MainViewModel(QObject):
     def _on_merge_finished(self, success: bool, message: str):
         self.merge_completed.emit(success, message)
         self.status_message.emit(message, 7000)
-        self.worker.deleteLater()
         self.worker = None
 
     # --- PDF Refresh ---
@@ -631,9 +617,9 @@ class MainViewModel(QObject):
         self.pdf_refreshed.emit(row, changes)
 
         if changes:
-            self.status_message.emit(f"Updated: {'; '.join(changes)}", 7000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Updated: {0}").format('; '.join(changes)), 7000)
         else:
-            self.status_message.emit(f"{pdf.name}: no changes detected.", 3000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "{0}: no changes detected.").format(pdf.name), 3000)
 
     def change_pdf_path(self, row: int, new_path: str):
         """Change the file path of an existing PDF entry, preserving custom_toc."""
@@ -664,7 +650,7 @@ class MainViewModel(QObject):
         self.pdf_list_model.dataChanged.emit(top_left, bottom_right)
 
         self.pdf_refreshed.emit(row, changes)
-        self.status_message.emit(f"Relocated: {pdf.name}", 5000)
+        self.status_message.emit(QCoreApplication.translate("MainViewModel", "Relocated: {0}").format(pdf.name), 5000)
 
     # --- Project Save / Load ---
 
@@ -680,18 +666,19 @@ class MainViewModel(QObject):
                 self.pdf_list_model.pdfs,
                 self.output_dir,
                 output_name,
+                self.global_toc,
             )
             self.project_saved.emit(project_path)
-            self.status_message.emit(f"Project saved: {os.path.basename(project_path)}", 5000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Project saved: {0}").format(os.path.basename(project_path)), 5000)
         except Exception as e:
-            self.status_message.emit(f"Error saving project: {e}", 7000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Error saving project: {0}").format(e), 7000)
 
     def do_load_project(self, project_path: str):
         """Load a .pdfm project file, replacing the current session."""
         try:
             result = load_project(project_path)
         except (json.JSONDecodeError, KeyError, OSError) as e:
-            self.status_message.emit(f"Error loading project: {e}", 7000)
+            self.status_message.emit(QCoreApplication.translate("MainViewModel", "Error loading project: {0}").format(e), 7000)
             return
 
         # Clear current state
@@ -714,6 +701,9 @@ class MainViewModel(QObject):
             )
             self.pdf_list_model.pdfs.extend(pdfs)
             self.pdf_list_model.endInsertRows()
+            
+        self.global_toc = result.get("global_toc", [])
+        self.global_toc_changed.emit()
 
         # Verify metadata of found files against live disk state
         metadata_changes = verify_all_pdf_metadata(pdfs)
@@ -733,22 +723,22 @@ class MainViewModel(QObject):
         missing = result.get("missing_files", [])
         if missing:
             warnings.append(
-                f"The following files could not be found:\n"
+                QCoreApplication.translate("MainViewModel", "The following files could not be found:\n")
                 + "\n".join(f"  \u2022 {n}" for n in missing)
-                + "\n\nThey are shown in the list but cannot be merged until relocated or removed."
+                + QCoreApplication.translate("MainViewModel", "\n\nThey are shown in the list but cannot be merged until relocated or removed.")
             )
         if metadata_changes:
             warnings.append(
-                f"The following files have changed since the project was saved:\n"
+                QCoreApplication.translate("MainViewModel", "The following files have changed since the project was saved:\n")
                 + "\n".join(f"  \u2022 {c}" for c in metadata_changes)
             )
 
         if warnings:
             self.project_load_warning.emit("\n\n".join(warnings))
             self.status_message.emit(
-                f"Project loaded with {len(missing)} missing, {len(metadata_changes)} changed file(s).", 7000
+                QCoreApplication.translate("MainViewModel", "Project loaded with {0} missing, {1} changed file(s).").format(len(missing), len(metadata_changes)), 7000
             )
         else:
             self.status_message.emit(
-                f"Project loaded: {os.path.basename(project_path)}", 5000
+                QCoreApplication.translate("MainViewModel", "Project loaded: {0}").format(os.path.basename(project_path)), 5000
             )

@@ -9,6 +9,13 @@ QMainWindow, QWidget#central_widget, QDialog {
     background-color: #F3F3F3;
 }
 
+/* ToolTip styling */
+QToolTip {
+    background-color: #FFFFFF;
+    color: #202020;
+    border: 1px solid #D1D1D1;
+}
+
 /* Table View styling */
 QTableView, QTreeView, QListView, QListWidget {
     background-color: #FFFFFF;
@@ -31,6 +38,8 @@ QListWidget::item:hover:!selected {
     background-color: #E1E1E1;
     border-radius: 4px;
 }
+
+
 
 QTableView::item, QTreeView::item, QListView::item, QListWidget::item {
     padding: 4px;
@@ -81,6 +90,23 @@ QPushButton:disabled {
     background-color: #F9F9F9;
     color: #A0A0A0;
     border-color: #E1E1E1;
+}
+
+QPushButton#closePaneButton {
+    background-color: transparent;
+    border: none;
+    padding: 0px;
+    font-weight: bold;
+    border-radius: 4px;
+    color: #888888;
+}
+QPushButton#closePaneButton:hover {
+    background-color: #E1E1E1;
+    color: #202020;
+}
+QPushButton#closePaneButton:pressed {
+    background-color: #D1D1D1;
+    color: #202020;
 }
 
 /* Primary Action Button (Accent Color) */

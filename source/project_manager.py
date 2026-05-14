@@ -12,7 +12,8 @@ import os
 from datetime import datetime
 from typing import List, Tuple, Dict, Any, Optional
 
-from model import PDFDocument
+from PySide6.QtCore import QCoreApplication
+from model import PDFDocument, BookmarkItem
 
 PROJECT_VERSION = 1
 PROJECT_EXTENSION = ".pdfm"
@@ -23,6 +24,7 @@ def save_project(
     pdf_list: List[PDFDocument],
     output_dir: str,
     output_name: str,
+    global_toc: List[BookmarkItem] = None,
 ) -> None:
     """
     Save the current merge session to a .pdfm JSON file.
@@ -47,12 +49,28 @@ def save_project(
             entry["custom_toc"] = pdf.custom_toc
         pdf_entries.append(entry)
 
+    # Serialize global_toc
+    serialized_toc = []
+    if global_toc is not None:
+        for bm in global_toc:
+            # We reference the source_pdf by its index in the pdf_list
+            pdf_idx = -1
+            if bm.source_pdf in pdf_list:
+                pdf_idx = pdf_list.index(bm.source_pdf)
+            serialized_toc.append({
+                "title": bm.title,
+                "page": bm.page,
+                "level": bm.level,
+                "pdf_index": pdf_idx
+            })
+
     project_data = {
         "version": PROJECT_VERSION,
         "output_dir_absolute": os.path.abspath(output_dir) if output_dir else "",
         "output_dir_relative": _safe_relpath(output_dir, project_dir) if output_dir else "",
         "output_name": output_name,
         "pdfs": pdf_entries,
+        "global_toc": serialized_toc,
     }
 
     with open(project_path, "w", encoding="utf-8") as f:
@@ -70,6 +88,7 @@ def load_project(
         - output_dir: str
         - output_name: str
         - missing_files: List[str]  (names of files that could not be found)
+        - global_toc: List[BookmarkItem]
     """
     with open(project_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -115,11 +134,38 @@ def load_project(
 
     output_name = data.get("output_name", "")
 
+    global_toc: List[BookmarkItem] = []
+    
+    # Load global_toc if present (new format)
+    if "global_toc" in data:
+        for bm_data in data["global_toc"]:
+            pdf_idx = bm_data.get("pdf_index", -1)
+            if 0 <= pdf_idx < len(pdfs):
+                source_pdf = pdfs[pdf_idx]
+                bm = BookmarkItem(
+                    title=bm_data.get("title", QCoreApplication.translate("project_manager", "Untitled")),
+                    page=bm_data.get("page", 1),
+                    level=bm_data.get("level", 1),
+                    source_pdf=source_pdf
+                )
+                global_toc.append(bm)
+    else:
+        # Legacy format: construct global_toc from individual custom_toc
+        for pdf in pdfs:
+            if pdf.custom_toc:
+                for item in pdf.custom_toc:
+                    if len(item) >= 3:
+                        lvl, title, page = item[0], item[1], item[2]
+                        global_toc.append(BookmarkItem(title=title, page=page, level=lvl, source_pdf=pdf))
+            else:
+                global_toc.append(BookmarkItem(title=os.path.splitext(pdf.name)[0], page=1, level=1, source_pdf=pdf))
+
     return {
         "pdfs": pdfs,
         "output_dir": output_dir,
         "output_name": output_name,
         "missing_files": missing_files,
+        "global_toc": global_toc,
     }
 
 
@@ -181,7 +227,7 @@ def refresh_pdf_metadata(pdf: PDFDocument) -> List[str]:
     if not os.path.exists(file_path):
         if not pdf.missing:
             pdf.missing = True
-            changes.append(f"{pdf.name}: file no longer found")
+            changes.append(QCoreApplication.translate("project_manager", "{0}: file no longer found").format(pdf.name))
         return changes
 
     try:
@@ -193,16 +239,16 @@ def refresh_pdf_metadata(pdf: PDFDocument) -> List[str]:
         new_pages = doc.page_count
         doc.close()
     except Exception as e:
-        changes.append(f"{pdf.name}: error reading file — {e}")
+        changes.append(QCoreApplication.translate("project_manager", "{0}: error reading file — {1}").format(pdf.name, e))
         return changes
 
     # Compare and collect changes
     if pdf.pages != new_pages:
-        changes.append(f"{pdf.name}: page count changed ({pdf.pages} → {new_pages})")
+        changes.append(QCoreApplication.translate("project_manager", "{0}: page count changed ({1} → {2})").format(pdf.name, pdf.pages, new_pages))
     if abs(pdf.size_kb - new_size_kb) > 0.1:
-        changes.append(f"{pdf.name}: file size changed ({pdf.size_kb:.1f} KB → {new_size_kb:.1f} KB)")
+        changes.append(QCoreApplication.translate("project_manager", "{0}: file size changed ({1:.1f} KB → {2:.1f} KB)").format(pdf.name, pdf.size_kb, new_size_kb))
     if pdf.modified_dt != new_modified_dt:
-        changes.append(f"{pdf.name}: modified date changed")
+        changes.append(QCoreApplication.translate("project_manager", "{0}: modified date changed").format(pdf.name))
 
     # Apply updates
     pdf.pages = new_pages

@@ -38,16 +38,23 @@ def test_merge_pdfs_engine_success(tmp_path, dummy_pdfs):
     output_path = str(tmp_path / "merged.pdf")
     
     pdf_docs = []
-    for path in dummy_pdfs:
-        pdf_docs.append(PDFDocument(
+    global_toc = []
+    for i, path in enumerate(dummy_pdfs):
+        doc = PDFDocument(
             file_path=path,
             name=os.path.basename(path),
             size_kb=10.0,
             modified_dt=datetime.now(),
             pages=2
-        ))
+        )
+        pdf_docs.append(doc)
         
-    success, msg = merge_pdfs_engine(pdf_docs, output_path)
+        # Build global TOC that matches the dummy PDFs
+        from model import BookmarkItem
+        global_toc.append(BookmarkItem(title=f"Document {i+1}", page=1, level=1, source_pdf=doc))
+        global_toc.append(BookmarkItem(title=f"Doc {i+1} - P2", page=2, level=2, source_pdf=doc))
+        
+    success, msg = merge_pdfs_engine(pdf_docs, output_path, global_toc)
     
     assert success is True
     assert "Merged 2 PDF(s)" in msg
@@ -59,7 +66,7 @@ def test_merge_pdfs_engine_success(tmp_path, dummy_pdfs):
     
     # Verify ToC points to right pages
     result_toc = result_doc.get_toc()
-    assert len(result_toc) == 4 # 2 from doc1 + 2 from doc2 (generated bookmarks omitted due to existing page 1 bookmarks)
+    assert len(result_toc) == 4 # 2 from doc1 + 2 from doc2
     
     # Close the doc to prevent file locks in windows
     result_doc.close()

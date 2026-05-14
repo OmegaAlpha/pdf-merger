@@ -74,6 +74,9 @@ class SettingsDialog(QDialog):
         self.theme_label.setText(self.tr("Appearance Theme:"))
         self.lang_label.setText(self.tr("Language:"))
         
+        self.button_box.button(QDialogButtonBox.StandardButton.Ok).setText(self.tr("OK"))
+        self.button_box.button(QDialogButtonBox.StandardButton.Cancel).setText(self.tr("Cancel"))
+        
         # Translate theme combo items
         theme_translations = {
             "System Default": self.tr("System Default"),
