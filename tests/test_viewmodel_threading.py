@@ -39,9 +39,10 @@ def test_rapid_thumbnail_requests(qtbot, dummy_pdf):
     print(f"Active/abandoned workers: {len(vm._active_workers)}")
     
     # Final wait to ensure cleanup
-    qtbot.waitUntil(lambda: len(vm._active_workers) == 0, timeout=10000)
+    qtbot.waitUntil(lambda: len(vm._active_workers) == 0 and vm.thumbnail_worker is None, timeout=10000)
     
     assert len(vm._active_workers) == 0
+    assert vm.thumbnail_worker is None
     # If we reached here without a crash/segfault, the test passed.
 
 def test_rapid_add_pdfs(qtbot, dummy_pdf):
@@ -53,6 +54,7 @@ def test_rapid_add_pdfs(qtbot, dummy_pdf):
         
     # Wait for completion
     qtbot.waitUntil(lambda: len(vm.pdf_list_model.pdfs) > 0, timeout=5000)
-    qtbot.waitUntil(lambda: len(vm._active_workers) == 0, timeout=5000)
+    qtbot.waitUntil(lambda: len(vm._active_workers) == 0 and vm.add_worker is None, timeout=5000)
     
     assert len(vm._active_workers) == 0
+    assert vm.add_worker is None
